@@ -19,9 +19,9 @@ let rec grad_search formula init iter =
   Logger.log ~level:`trace "Gradient";
   Logger.log ~level:`trace ((VarMap.fold (fun key x y -> y ^ "\n" ^ key ^ " := " ^ (string_of_float x)) grad "") ^ "\n\n");
   if (value > 0.) then (
-    "SAT"
+    "sat"
   ) else if (iter = 0) then(
-    "UNKNOWN"
+    "unknown"
   ) else (
     let update var x =
       if x < 0. && (VarMap.find var !init) > 0. then
