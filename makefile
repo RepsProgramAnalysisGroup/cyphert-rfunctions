@@ -9,3 +9,6 @@ clean:
 
 native:
 	$(OCB) $(OCB_FLAGS) rsat.native
+
+test: src/test.ml
+	$(OCB) $(OCB_FLAGS) test.native

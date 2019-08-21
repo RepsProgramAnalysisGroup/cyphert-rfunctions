@@ -56,7 +56,7 @@ let r_fun_test query =
   let app_res = Logger.log_time "Bit-blast" (Z3.Tactic.apply sim_then_bit g) None in
   let bit_blasted = Z3.Goal.as_expr (Z3.Tactic.ApplyResult.get_subgoal app_res 0) in
   let (r_fun, variables) = Logger.log_time "R-Construction" Acta.make_r bit_blasted in
-  let res = Logger.log_time "Search" (Search.search r_fun None variables) () in
+  let res = Logger.log_time "Search" (Search.search r_fun None variables ~iter:6) () in
   Logger.log (res ^ "\n")
   ;;
 
