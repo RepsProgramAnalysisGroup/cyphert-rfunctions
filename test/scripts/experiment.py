@@ -1,5 +1,9 @@
 import glob, os, sys, datetime, time, subprocess, shutil, csv, re
 
+example_dir = "/home/turetsky/cyphert-rfunctions/test/examples/"
+
+dirs = ["alu", "sprs", "wbmux"]
+
 alu = glob.glob("/home/turetsky/cyphert-rfunctions/test/examples/alu/*.smt2")
 sprs = glob.glob("/home/turetsky/cyphert-rfunctions/test/examples/sprs/*.smt2")
 wbmux = glob.glob("/home/turetsky/cyphert-rfunctions/test/examples/wbmux/*.smt2")
@@ -28,7 +32,7 @@ def make_dir (dir_path) :
 def run_example (example, logpath, result_writer):
   m = re.split('/', example)
   nicename = m[-1]
-  row = [example]
+  row = [nicename]
   for tool in tool_cmds:
     logname = logpath +nicename + "."+ tool + ".out"
     tool_time = -1.0
@@ -56,30 +60,18 @@ def run_example (example, logpath, result_writer):
     row = row + [str(tool_time)]
   result_writer.writerow(row)
 
-result_alu = csv.writer(open("alu.csv", "w"))
-result_alu.writerow(['file', 'rsat res', 'rsat time', 'stp res', 'stp time', 'boolector res', 'boolector time', 'z3 res', 'z3 time'])
-make_dir(output_root + "/alu/")
-for fil in alu:
-  with open(fil, "r") as ex:
-    if ('Solvable: true' not in ex.read()):
-      continue
-  run_example(fil, output_root + "/alu/", result_alu)
-  
-result_sprs = csv.writer(open("sprs.csv", "w"))
-result_sprs.writerow(['file', 'rsat res', 'rsat time', 'stp res', 'stp time', 'boolector res', 'boolector time', 'z3 res', 'z3 time'])
-make_dir(output_root + "/sprs/")
-for fil in sprs:
-  with open(fil, "r") as ex:
-    if ('Solvable: true' not in ex.read()):
-      continue
-  run_example(fil, output_root + "/sprs/", result_sprs)
-  
-result_wbmux = csv.writer(open("wbmux.csv", "w"))
-result_wbmux.writerow(['file', 'rsat res', 'rsat time', 'stp res', 'stp time', 'boolector res', 'boolector time', 'z3 res', 'z3 time'])
-make_dir(output_root + "/wbmux/")
-for fil in wbmux:
-  with open(fil, "r") as ex:
-    if ('Solvable: true' not in ex.read()):
-      continue
-  run_example(fil, output_root + "/wbmux/", result_wbmux)
-  
+
+for direc in dirs:
+  with open(direc+".csv", 'w') as csv_out:
+    csv_writer = csv.writer(csv_out)
+    row = ['file']
+    for tool in tool_cmds:
+      row = row + [tool + ' res', tool + ' time']
+    csv_writer.writerow(row)
+    files = glob.glob(example_dir + direc + "/*.smt2")
+    for fil in files:
+      with open(fil, 'r') as ex:
+        if ('Solvable: true' not in ex.read()):
+          continue
+      run_example(fil, output_root + "/" + direc + "/", csv_writer)
+
