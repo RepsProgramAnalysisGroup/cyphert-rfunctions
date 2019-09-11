@@ -1,21 +1,23 @@
 import glob, os, sys, datetime, time, subprocess, shutil, csv, re
 
-example_dir = "/home/turetsky/cyphert-rfunctions/test/examples/"
+root_dir = "/home/turetsky/cyphert-rfunctions"
+
+example_dir = root_dir + "/test/examples/"
 
 dirs = ["alu", "sprs", "wbmux"]
 
-alu = glob.glob("/home/turetsky/cyphert-rfunctions/test/examples/alu/*.smt2")
-sprs = glob.glob("/home/turetsky/cyphert-rfunctions/test/examples/sprs/*.smt2")
-wbmux = glob.glob("/home/turetsky/cyphert-rfunctions/test/examples/wbmux/*.smt2")
+alu = glob.glob(example_dir + "/alu/*.smt2")
+sprs = glob.glob(example_dir + "/sprs/*.smt2")
+wbmux = glob.glob(example_dir + "/wbmux/*.smt2")
 
-output_root = "/home/turetsky/cyphert-rfunctions/test/output"
+output_root = root_dir + "/test/output"
 
 
 tool_cmds = {
-  "rsat":["/home/turetsky/cyphert-rfunctions/rsat.native"],
+  "rsat":[root_dir + "/rsat.native"],
   "stp":["/home/turetsky/stp/build/stp"],
   "boolector":["/home/turetsky/boolector/build/bin/boolector"],
-  "z3":["/home/turetsky/z3-z3-4.7.1/build/z3"]
+  "z3":["/home/turetsky/z3-Z3-4.8.5/build/z3"]
 }
 
 timeout = 60.0

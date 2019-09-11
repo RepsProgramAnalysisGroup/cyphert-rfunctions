@@ -26,7 +26,8 @@ let log ?(level=`always) str =
   if level_leq !my_level level then
     Printf.fprintf !chan "%s" str
   else
-    Printf.ifprintf !chan "%s" str
+    Printf.ifprintf !chan "%s" str;
+  Printf.fprintf !chan "%!"
       
 let log_time label f arg = 
   let start_time = Unix.gettimeofday () in

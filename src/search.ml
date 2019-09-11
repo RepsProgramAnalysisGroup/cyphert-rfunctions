@@ -14,14 +14,14 @@ let map_contents key x y =
 
 let rec grad_search formula init iter =
   let (value, grad) = formula !init in
-  Logger.log ~level:`trace ("current_value := " ^ (string_of_float value));
-  Logger.log ~level:`trace ((VarMap.fold (fun key x y -> y ^ "\n" ^ key ^ " := " ^ (string_of_float x)) !init "") ^ "\n\n");
-  Logger.log ~level:`trace "Gradient";
-  Logger.log ~level:`trace ((VarMap.fold (fun key x y -> y ^ "\n" ^ key ^ " := " ^ (string_of_float x)) grad "") ^ "\n\n");
+  Logger.log ~level:`debug ("current_value := " ^ (string_of_float value));
+  Logger.log ~level:`debug ((VarMap.fold (fun key x y -> y ^ "\n" ^ key ^ " := " ^ (string_of_float x)) !init "") ^ "\n\n");
+  Logger.log ~level:`debug "Gradient";
+  Logger.log ~level:`debug ((VarMap.fold (fun key x y -> y ^ "\n" ^ key ^ " := " ^ (string_of_float x)) grad "") ^ "\n\n");
   if (value > 0.) then (
-    "sat"
+    Some !init
   ) else if (iter = 0) then(
-    "unknown"
+    None
   ) else (
     let update var x =
       if x < 0. && (VarMap.find var !init) > 0. then
