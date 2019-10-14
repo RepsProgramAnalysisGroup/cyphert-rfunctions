@@ -36,27 +36,30 @@ module Make (A : sig val orFun : rexpr val notFun : rexpr val baseFun : rexpr en
 
   let make_plus f g =
     let sub = fun vars ->
-      Logger.log ("Plus\n") ~level:`trace;
       let (fv, df) = f vars in
       let (gv, dg) = g vars in
+      let res = fv +. gv in
+      Logger.log ~level:`trace ("Add:" ^ (string_of_float res) ^ "=" ^ (string_of_float fv) ^ " + " ^ (string_of_float gv) ^ "\n");
       (fv +. gv, add_maps df dg)
     in
     memo sub
 
   let make_times f g =
     let sub = fun vars ->
-      Logger.log ("Times\n") ~level:`trace;
       let (fv, df) = f vars in
       let (gv, dg) = g vars in
+      let res = fv *. gv in
+      Logger.log ~level:`trace ("Mult:" ^ (string_of_float res) ^ "=" ^ (string_of_float fv) ^ " * " ^ (string_of_float gv) ^ "\n");
       (fv *. gv, add_maps (VarMap.map (fun x -> gv *. x) df) (VarMap.map (fun x -> fv *. x) dg))
     in
     memo sub
 
   let make_pow n f =
     let sub = fun vars ->
-      Logger.log ("Pow\n") ~level:`trace;
       let (value, df) = (f vars) in
       let multiplier = n *. (value)**(n -. 1.) in
+      let res = value ** n in
+      Logger.log ~level:`trace ("Exp:" ^ (string_of_float res) ^ "=" ^ (string_of_float value) ^ " ** " ^ (string_of_float n) ^ "\n");
       (value ** n, VarMap.map (fun x -> multiplier *. x) df)
     in
     memo sub
