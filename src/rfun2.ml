@@ -16,7 +16,7 @@ end
 
 module Logger = Log
 
-module Make (A : sig val orFun : rexpr val notFun : rexpr val baseFun : rexpr end) : RFun = struct
+module Make (A : sig val orFun : rexpr val andFun : rexpr val notFun : rexpr val baseFun : rexpr end) : RFun = struct
   
   type op = 
     | Add
@@ -150,10 +150,11 @@ module Make (A : sig val orFun : rexpr val notFun : rexpr val baseFun : rexpr en
     add_fun new_node hashcode new_node hashcode A.notFun
   
   let add_and left_code left_node right_code right_node = 
-    let (nl_code, nl_node) = add_not left_code left_node in
-    let (nr_code, nr_node) = add_not right_code right_node in
-    let (onlnr_c, onlnr_n) = add_or nl_code nl_node nr_code nr_node in
-    add_not onlnr_c onlnr_n
+    let (nlc, nln) = add_not left_code left_node in
+    let (nrc, nrn) = add_not right_code right_node in
+    let (onlnrc, onlnrn) = add_or nlc nln nrc nrn in
+    add_not onlnrc onlnrn
+    (*add_fun left_node left_code right_node right_code A.andFun*)
 
 
   let add_eq left_code left_node right_code right_node =
@@ -186,7 +187,7 @@ module Make (A : sig val orFun : rexpr val notFun : rexpr val baseFun : rexpr en
       (id, false_nde)
    | Some x -> x
  
-  module Vis = Graph.Graphviz.Dot(
+(*)  module Vis = Graph.Graphviz.Dot(
     struct 
       include CGraph
       let graph_attributes g = []
@@ -203,7 +204,7 @@ module Make (A : sig val orFun : rexpr val notFun : rexpr val baseFun : rexpr en
       let get_subgraph v = None
       let default_edge_attributes g = []
       let edge_attributes e = []
-    end) 
+    end) *)
 
   let make_comp_graph ex =
     id_count := 0;
@@ -223,13 +224,35 @@ module Make (A : sig val orFun : rexpr val notFun : rexpr val baseFun : rexpr en
         let fold_fun (left_code, left_node) (right_code, right_node) =
           add_or left_code left_node right_code right_node
         in
-        List.fold_left fold_fun (List.hd args) (List.tl args))
+        let rec collapse l = 
+          if (List.length l = 2) then fold_fun (List.nth l 0) (List.nth l 1)
+          else if (List.length l = 3) then fold_fun (fold_fun (List.nth l 0) (List.nth l 1)) (List.nth l 2)
+          else if (List.length l = 1) then failwith "Don't think this should happen"
+          else
+            let pivot = (List.length l) / 2 in
+            let left_list = ref [] in
+            let right_list = ref [] in
+            List.iteri (fun i x -> if (i < pivot) then left_list := x :: !left_list  else right_list := x :: !right_list) l;
+            fold_fun (collapse !left_list) (collapse !right_list)
+        in
+        collapse args)
       else if Z3.Boolean.is_and expr then (
         let args = List.map aux (Z3.Expr.get_args expr) in
         let fold_fun (left_code, left_node) (right_code, right_node) =
           add_and left_code left_node right_code right_node
         in
-        List.fold_left fold_fun (List.hd args) (List.tl args))
+        let rec collapse l = 
+          if (List.length l = 2) then fold_fun (List.nth l 0) (List.nth l 1)
+          else if (List.length l = 3) then fold_fun (fold_fun (List.nth l 0) (List.nth l 1)) (List.nth l 2)
+          else if (List.length l = 1) then failwith "Don't think this should happen"
+          else
+            let pivot = (List.length l) / 2 in
+            let left_list = ref [] in
+            let right_list = ref [] in
+            List.iteri (fun i x -> if (i < pivot) then left_list := x :: !left_list  else right_list := x :: !right_list) l;
+            fold_fun (collapse !left_list) (collapse !right_list)
+        in
+        collapse args)
       else if Z3.Boolean.is_not expr then (
         let (hashcode, new_node) = aux (List.nth (Z3.Expr.get_args expr) 0) in
         add_not hashcode new_node)
@@ -248,9 +271,9 @@ module Make (A : sig val orFun : rexpr val notFun : rexpr val baseFun : rexpr en
     edge_tbl := Some (EdgeTbl.create num_edges);
     Logger.log ~level:`trace ("Number of nodes: " ^ (string_of_int num_nodes) ^ "\n");
     Logger.log ~level:`trace ("Number of edges: " ^ (string_of_int num_edges) ^ "\n");
-    let oc = open_out "graph.dot" in
+    (*let oc = open_out "graph.dot" in
     Vis.output_graph oc comp_graph;
-    close_out oc;
+    close_out oc;*)
     !vars
 
   let been_evaled = ref false

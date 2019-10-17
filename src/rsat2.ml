@@ -4,6 +4,7 @@ module Acta = Make (struct
   let orFun = Plus (Plus (X, Y), Pow (Plus (Pow (X, 2.), Pow (Y, 2.)), 0.5))
   let notFun = Times (Const (-1.), X)
   let baseFun = Plus (X, Const (-0.5))
+  let andFun = Plus (Plus (X, Y), Times (Pow (Plus (Pow (X, 2.), Pow (Y, 2.)), 0.5), Const (-1.)))
 end)
 
 module Logger = Log
@@ -257,7 +258,7 @@ module Search = Search2.Make(Acta)
 let r_fun expr =
   let variables = Logger.log_time "R-Construction" Acta.make_comp_graph expr in
   Logger.log ("Number of free variables: " ^ (string_of_int (List.length variables)) ^ "\n") ~level:`debug;
-  let res = Logger.log_time "Search" (Search.search None variables ~iter:6) () in
+  let res = Logger.log_time "Search" (Search.search None variables ~iter:50) () in
   (match res with
     | None -> Logger.log ("unknown\n")
     | Some _ -> Logger.log ("sat\n"));
