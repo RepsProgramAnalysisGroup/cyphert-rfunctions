@@ -16,7 +16,7 @@ end
 
 module Logger = Log
 
-module Make (A : sig val orFun : rexpr val andFun : rexpr val notFun : rexpr val baseFun : rexpr end) : RFun = struct
+module Make () : RFun = struct
   
   type op = 
     | Add
@@ -53,200 +53,73 @@ module Make (A : sig val orFun : rexpr val andFun : rexpr val notFun : rexpr val
       !id_count
 
   let add_base var = 
-    (*let var_node = (Var var, []) in
-    let const_node = (Const (-0.5), []) in
-    let add_node = (Add, List.sort compare [get_id var_node; get_id const_node]) in
-    let e1 = CGraph.E.create add_node 1 var_node in
-    let e2 = CGraph.E.create add_node 2 const_node in
-    CGraph.add_edge_e comp_graph e1;
-    CGraph.add_edge_e comp_graph e2;
-    (get_id add_node, add_node)*)
+    let var_node = (Var var, []) in
+    let minus_1 = (Const (-1.), []) in
+    let add_node = (Add, List.sort compare [get_id var_node; get_id minus_1]) in
+    CGraph.add_edge comp_graph add_node var_node;
+    CGraph.add_edge comp_graph add_node minus_1;
+    let sqr_node = (Exp 2., [get_id add_node]) in
+    CGraph.add_edge comp_graph sqr_node add_node;
+    (get_id sqr_node, sqr_node)
 
-    let rec aux (expr : rexpr) : int * CGraph.vertex = 
-      match expr with
-      | X -> 
-        let new_node = (Var var, []) in
-        (* add to leaf set*)
-        CGraph.add_vertex comp_graph new_node;
-        (get_id new_node, new_node)
-        | Plus (left, right) ->
-        let (left_code, left_node) = aux left in
-        let (right_code, right_node) = aux right in
-        if (left_code < right_code) then (
-          let new_node = (Add, [left_code; right_code]) in
-          let id = get_id new_node in
-          (*Logger.log ~level:`trace ("Making edge from " ^ (string_of_int id) ^ " to " ^ (string_of_int left_code) ^ " and " ^ (string_of_int right_code) ^ "\n");*)
-          CGraph.add_vertex comp_graph new_node;
-          let e1 = CGraph.E.create new_node 1 left_node in
-          let e2 = CGraph.E.create new_node 2 right_node in
-          CGraph.add_edge_e comp_graph e1;
-          CGraph.add_edge_e comp_graph e2;
-          (id, new_node))
-        else (
-          let new_node = (Add, [right_code; left_code]) in
-          let id = get_id new_node in
-          (*Logger.log ~level:`trace ("Making edge from " ^ (string_of_int id) ^ " to " ^ (string_of_int left_code) ^ " and " ^ (string_of_int right_code) ^ "\n");*)
-          CGraph.add_vertex comp_graph new_node;
-          let e1 = CGraph.E.create new_node 1 right_node in
-          let e2 = CGraph.E.create new_node 2 left_node in
-          CGraph.add_edge_e comp_graph e1;
-          CGraph.add_edge_e comp_graph e2;
-          (id, new_node))
-      | Times (left, right) ->
-        let (left_code, left_node) = aux left in
-        let (right_code, right_node) = aux right in
-        if (left_code < right_code) then (
-          let new_node = (Mult, [left_code; right_code]) in
-          let id = get_id new_node in
-          (*Logger.log ~level:`trace ("Making edge from " ^ (string_of_int id) ^ " to " ^ (string_of_int left_code) ^ " and " ^ (string_of_int right_code) ^ "\n");*)
-          CGraph.add_vertex comp_graph new_node;
-          let e1 = CGraph.E.create new_node 1 left_node in
-          let e2 = CGraph.E.create new_node 2 right_node in
-          CGraph.add_edge_e comp_graph e1;
-          CGraph.add_edge_e comp_graph e2;
-          (id, new_node))
-        else (
-          let new_node = (Mult, [right_code; left_code]) in
-          let id = get_id new_node in
-          (*Logger.log ~level:`trace ("Making edge from " ^ (string_of_int id) ^ " to " ^ (string_of_int left_code) ^ " and " ^ (string_of_int right_code) ^ "\n");*)
-          CGraph.add_vertex comp_graph new_node;
-          let e1 = CGraph.E.create new_node 1 right_node in
-          let e2 = CGraph.E.create new_node 2 left_node in
-          CGraph.add_edge_e comp_graph e1;
-          CGraph.add_edge_e comp_graph e2;
-          (id, new_node))
-      | Pow (base, n) ->
-        let (base_code, base_node) = aux base in
-        let new_node = (Exp n, [base_code]) in
-        CGraph.add_vertex comp_graph new_node;
-        CGraph.add_edge comp_graph new_node base_node;
-        (get_id new_node, new_node)
-      | Const n ->
-        let new_node = (Const n, []) in
-        CGraph.add_vertex comp_graph new_node;
-        (get_id new_node, new_node)
-      | Y -> failwith "Y shouldn't be a part of the base expr"
-    in
-    aux A.baseFun
-
-
-  let add_fun left_node left_code right_node right_code rfun_rule =
-    let rec aux (expr : rexpr) : int * CGraph.vertex=
-      match expr with
-      | X ->
-        (left_code, left_node)
-      | Y ->
-        (right_code, right_node)
-      | Plus (left, right) ->
-        let (left_code, left_node) = aux left in
-        let (right_code, right_node) = aux right in
-        if (left_code < right_code) then (
-          let new_node = (Add, [left_code; right_code]) in
-          let id = get_id new_node in
-          (*Logger.log ~level:`trace ("Making edge from " ^ (string_of_int id) ^ " to " ^ (string_of_int left_code) ^ " and " ^ (string_of_int right_code) ^ "\n");*)
-          CGraph.add_vertex comp_graph new_node;
-          let e1 = CGraph.E.create new_node 1 left_node in
-          let e2 = CGraph.E.create new_node 2 right_node in
-          CGraph.add_edge_e comp_graph e1;
-          CGraph.add_edge_e comp_graph e2;
-          (id, new_node))
-        else (
-          let new_node = (Add, [right_code; left_code]) in
-          let id = get_id new_node in
-          (*Logger.log ~level:`trace ("Making edge from " ^ (string_of_int id) ^ " to " ^ (string_of_int left_code) ^ " and " ^ (string_of_int right_code) ^ "\n");*)
-          CGraph.add_vertex comp_graph new_node;
-          let e1 = CGraph.E.create new_node 1 right_node in
-          let e2 = CGraph.E.create new_node 2 left_node in
-          CGraph.add_edge_e comp_graph e1;
-          CGraph.add_edge_e comp_graph e2;
-          (id, new_node))
-      | Times (left, right) ->
-        let (left_code, left_node) = aux left in
-        let (right_code, right_node) = aux right in
-        if (left_code < right_code) then (
-          let new_node = (Mult, [left_code; right_code]) in
-          let id = get_id new_node in
-          (*Logger.log ~level:`trace ("Making edge from " ^ (string_of_int id) ^ " to " ^ (string_of_int left_code) ^ " and " ^ (string_of_int right_code) ^ "\n");*)
-          CGraph.add_vertex comp_graph new_node;
-          let e1 = CGraph.E.create new_node 1 left_node in
-          let e2 = CGraph.E.create new_node 2 right_node in
-          CGraph.add_edge_e comp_graph e1;
-          CGraph.add_edge_e comp_graph e2;
-          (id, new_node))
-        else (
-          let new_node = (Mult, [right_code; left_code]) in
-          let id = get_id new_node in
-          (*Logger.log ~level:`trace ("Making edge from " ^ (string_of_int id) ^ " to " ^ (string_of_int left_code) ^ " and " ^ (string_of_int right_code) ^ "\n");*)
-          CGraph.add_vertex comp_graph new_node;
-          let e1 = CGraph.E.create new_node 1 right_node in
-          let e2 = CGraph.E.create new_node 2 left_node in
-          CGraph.add_edge_e comp_graph e1;
-          CGraph.add_edge_e comp_graph e2;
-          (id, new_node))
-      | Pow (base, n) ->
-        let (base_code, base_node) = aux base in
-        let new_node = (Exp n, [base_code]) in
-        CGraph.add_vertex comp_graph new_node;
-        CGraph.add_edge comp_graph new_node base_node;
-        (get_id new_node, new_node)
-      | Const n ->
-        let new_node = (Const n, []) in
-        CGraph.add_vertex comp_graph new_node;
-        (get_id new_node, new_node)
-    in
-    aux rfun_rule
-
+  let add_base_not var = 
+    let var_node = (Var var, []) in
+    let sqr_node = (Exp 2., [get_id var_node]) in
+    CGraph.add_edge comp_graph sqr_node var_node;
+    (get_id sqr_node, sqr_node)
+    
   let add_or left_code left_node right_code right_node = 
-    (*let add_l_r = (Add, List.sort compare [left_code;right_code]) in
-    let add_e1 = CGraph.E.create add_l_r 1 left_node in
-    let add_e2 = CGraph.E.create add_l_r 2 right_node in
-    CGraph.add_edge_e comp_graph add_e1;
-    CGraph.add_edge_e comp_graph add_e2;
-    let l_sq = (Exp 2., [left_code]) in
-    CGraph.add_edge comp_graph l_sq left_node;
-    let r_sq = (Exp 2., [right_code]) in
-    CGraph.add_edge comp_graph r_sq right_node;
-    let add_ls_rs = (Add, List.sort compare [get_id l_sq; get_id r_sq]) in
-    let add_ls_rs_e1 = CGraph.E.create add_ls_rs 1 l_sq in
-    let add_ls_rs_e2 = CGraph.E.create add_ls_rs 2 r_sq in
-    CGraph.add_edge_e comp_graph add_ls_rs_e1;
-    CGraph.add_edge_e comp_graph add_ls_rs_e2;
-    let sqr = (Exp 0.5, [get_id add_ls_rs]) in
-    CGraph.add_edge comp_graph sqr add_ls_rs;
-    let res = (Add, List.sort compare [get_id sqr; get_id add_l_r]) in
-    let res_e1 = CGraph.E.create res 1 add_l_r in
-    let res_e2 = CGraph.E.create res 2 sqr in
-    CGraph.add_edge_e comp_graph res_e1;
-    CGraph.add_edge_e comp_graph res_e2;
-    (get_id res, res)*)
-  
-    add_fun left_node left_code right_node right_code A.orFun
+    let times_node = (Mult, List.sort compare [left_code; right_code]) in
+    (if (left_code = right_code) then
+      (let e1 = CGraph.E.create times_node 1 left_node in
+      let e2 = CGraph.E.create times_node 2 right_node in
+      CGraph.add_edge_e comp_graph e1;
+      CGraph.add_edge_e comp_graph e2)
+    else (
+      CGraph.add_edge comp_graph times_node left_node;
+      CGraph.add_edge comp_graph times_node right_node
+    ));
+    (get_id times_node, times_node)
 
-  let add_not hashcode new_node = 
-    (*let const_node = (Const (-1.), []) in
-    let mult_node = (Mult, List.sort compare [get_id const_node; hashcode]) in
-    let mult_e1 = CGraph.E.create mult_node 1 const_node in
-    let mult_e2 = CGraph.E.create mult_node 2 new_node in
-    CGraph.add_edge_e comp_graph mult_e1;
-    CGraph.add_edge_e comp_graph mult_e2;
-    (get_id mult_node, mult_node)*)
-
-    add_fun new_node hashcode new_node hashcode A.notFun
-  
   let add_and left_code left_node right_code right_node = 
-    let (nlc, nln) = add_not left_code left_node in
-    let (nrc, nrn) = add_not right_code right_node in
-    let (onlnrc, onlnrn) = add_or nlc nln nrc nrn in
-    add_not onlnrc onlnrn
-    (*add_fun left_node left_code right_node right_code A.andFun*)
+    let add_node = (Add, List.sort compare [left_code; right_code]) in
+    (if (left_code = right_code) then
+      (let e1 = CGraph.E.create add_node 1 left_node in
+      let e2 = CGraph.E.create add_node 2 right_node in
+      CGraph.add_edge_e comp_graph e1;
+      CGraph.add_edge_e comp_graph e2)
+    else (
+      CGraph.add_edge comp_graph add_node left_node;
+      CGraph.add_edge comp_graph add_node right_node
+    ));
+    (get_id add_node, add_node)
 
 
   let add_eq left_code left_node right_code right_node =
-    let (and_lr_c, and_lr_n) = add_and left_code left_node right_code right_node in
-    let (nl_code, nl_node) = add_not left_code left_node in
-    let (nr_code, nr_node) = add_not right_code right_node in
-    let (and_nlnr_c, and_nlnr_n) = add_and nl_code nl_node nr_code nr_node in
-    add_or and_lr_c and_lr_n and_nlnr_c and_nlnr_n
+    let minus_1 = (Const (-1.), []) in
+    let minus_1_id = get_id minus_1 in
+    let times_node = (Mult, List.sort compare [right_code; minus_1_id]) in
+    (if (right_code = minus_1_id) then
+      (let e1 = CGraph.E.create times_node 1 right_node in
+      let e2 = CGraph.E.create times_node 2 minus_1 in
+      CGraph.add_edge_e comp_graph e1;
+      CGraph.add_edge_e comp_graph e2)
+    else (
+      CGraph.add_edge comp_graph times_node right_node;
+      CGraph.add_edge comp_graph times_node minus_1
+    ));
+    let times_id = get_id times_node in
+    let add_node = (Add, List.sort compare [times_id; left_code]) in
+    (if (left_code = times_id) then
+      (let e1 = CGraph.E.create add_node 1 times_node in
+      let e2 = CGraph.E.create add_node 2 left_node in
+      CGraph.add_edge_e comp_graph e1;
+      CGraph.add_edge_e comp_graph e2)
+    else (
+      CGraph.add_edge comp_graph add_node times_node;
+      CGraph.add_edge comp_graph add_node left_node
+    ));
+    (get_id add_node, add_node)
 
   let true_node = ref None
   let false_node = ref None
@@ -254,7 +127,7 @@ module Make (A : sig val orFun : rexpr val andFun : rexpr val notFun : rexpr val
   let add_true () = 
     match !true_node with
     | None ->
-      let true_nde = (Const 1., []) in
+      let true_nde = (Const 0., []) in
       CGraph.add_vertex comp_graph true_nde;
       let id = get_id true_nde in
       true_node := Some (id, true_nde);
@@ -264,14 +137,14 @@ module Make (A : sig val orFun : rexpr val andFun : rexpr val notFun : rexpr val
   let add_false () = 
     match !false_node with
     | None ->
-      let false_nde = (Const (-1.), []) in
+      let false_nde = (Const (1.), []) in
       CGraph.add_vertex comp_graph false_nde;
       let id = get_id false_nde in
       false_node := Some (id, false_nde);
       (id, false_nde)
    | Some x -> x
  
-  module Vis = Graph.Graphviz.Dot(
+   (*module Vis = Graph.Graphviz.Dot(
     struct 
       include CGraph
       let graph_attributes g = []
@@ -288,7 +161,7 @@ module Make (A : sig val orFun : rexpr val andFun : rexpr val notFun : rexpr val
       let get_subgraph v = None
       let default_edge_attributes g = []
       let edge_attributes e = []
-    end) 
+    end) *)
 
   module IntTbl = Hashtbl.Make(struct type t = int let equal = (=) let hash = Hashtbl.hash end)
 
@@ -350,10 +223,13 @@ module Make (A : sig val orFun : rexpr val andFun : rexpr val notFun : rexpr val
           IntTbl.add expr_tbl expr_id res;
           res)
         else if Z3.Boolean.is_not expr then (
-          let (hashcode, new_node) = aux (List.nth (Z3.Expr.get_args expr) 0) in
-          let res = add_not hashcode new_node in
-          IntTbl.add expr_tbl expr_id res;
-          res)
+          let child = List.nth (Z3.Expr.get_args expr) 0 in
+          if (Z3.Expr.is_const child) then
+            let name = Z3.Expr.to_string child in
+            if not (List.mem name !vars) then (vars := name :: !vars);
+            add_base_not name
+          else
+            failwith "Input formula wasn't in NNF")
         else if Z3.Boolean.is_eq expr then (
           let args = List.map aux (Z3.Expr.get_args expr) in
           let res = add_eq (fst (List.nth args 0)) (snd (List.nth args 0)) (fst (List.nth args 1)) (snd (List.nth args 1)) in
@@ -371,9 +247,9 @@ module Make (A : sig val orFun : rexpr val andFun : rexpr val notFun : rexpr val
     edge_tbl := Some (EdgeTbl.create num_edges);
     Logger.log ~level:`trace ("Number of nodes: " ^ (string_of_int num_nodes) ^ "\n");
     Logger.log ~level:`trace ("Number of edges: " ^ (string_of_int num_edges) ^ "\n");
-    let oc = open_out "graph.dot" in
+    (*let oc = open_out "graph.dot" in
     Vis.output_graph oc comp_graph;
-    close_out oc;
+    close_out oc;*)
     !vars
 
   let been_evaled = ref false

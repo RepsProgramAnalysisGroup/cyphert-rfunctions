@@ -12,3 +12,6 @@ native:
 
 rsat2:
 	$(OCB) $(OCB_FLAGS) rsat2.native
+
+rsatloss:
+	$(OCB) $(OCB_FLAGS) rsatLoss.native

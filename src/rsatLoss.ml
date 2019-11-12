@@ -1,11 +1,6 @@
-open Rfun2
+open RfunLoss
 
-module Acta = Make (struct
-  let orFun = Plus (Plus (X, Y), Pow (Plus (Pow (X, 2.), Pow (Y, 2.)), 0.5))
-  let notFun = Times (Const (-1.), X)
-  let baseFun = Plus (X, Const (-0.5))
-  let andFun = Plus (Plus (X, Y), Times (Pow (Plus (Pow (X, 2.), Pow (Y, 2.)), 0.5), Const (-1.)))
-end)
+module Acta = Make ()
 
 module Logger = Log
 
@@ -245,17 +240,19 @@ let aufbv2bool ctx expr =
   (*Logger.log ("No array: " ^ (Z3.Expr.to_string no_array) ^ "\n") ~level:`trace;*)
   let sim = Z3.Tactic.mk_tactic new_ctx "simplify" in
   let bit = Z3.Tactic.mk_tactic new_ctx "bit-blast" in
-  let pre_proc = Z3.Tactic.mk_tactic new_ctx "propagate-values" in
+  let nnf = Z3.Tactic.mk_tactic new_ctx "nnf" in
+  let prop = Z3.Tactic.mk_tactic new_ctx "propagate-values" in
   let sim_then_bit = Z3.Tactic.and_then new_ctx sim bit [] in
-  let sim_then_bit_then_pre = Z3.Tactic.and_then new_ctx sim_then_bit pre_proc [] in
+  let sim_then_bit_then_nnf = Z3.Tactic.and_then new_ctx sim_then_bit nnf [] in
+  let sim_then_bit_then_nnf_then_prop = Z3.Tactic.and_then new_ctx sim_then_bit_then_nnf prop [] in
   let new_g = Z3.Goal.mk_goal new_ctx false false false in
   Z3.Goal.add new_g [no_array];
-  let bit_blasted = Z3.Goal.as_expr (Z3.Tactic.ApplyResult.get_subgoal (Z3.Tactic.apply sim_then_bit_then_pre new_g None) 0) in
+  let bit_blasted = Z3.Goal.as_expr (Z3.Tactic.ApplyResult.get_subgoal (Z3.Tactic.apply sim_then_bit_then_nnf_then_prop new_g None) 0) in
   (*Logger.log ("Bit blasted: " ^ (Z3.Expr.to_string bit_blasted) ^ "\n") ~level:`trace;*)
   (new_ctx, bit_blasted)
   ;;
 
-module Search = Search2.Make(Acta)
+module Search = SearchLoss.Make(Acta)
 
 let r_fun expr =
   let variables = Logger.log_time "R-Construction" Acta.make_comp_graph expr in

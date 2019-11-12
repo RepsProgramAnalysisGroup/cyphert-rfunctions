@@ -12,6 +12,7 @@ output_root = root_dir + "/test/output"
 
 
 tool_cmds = {
+  "rsatloss":[root_dir + "/rsatLoss.native"],
   "rsat2":[root_dir + "/rsat2.native"],
   "stp":["/home/turetsky/stp/build/stp"],
   "boolector":["/home/turetsky/boolector/build/bin/boolector"],
@@ -52,6 +53,8 @@ def run_example (example, logpath, result_writer):
           res = "timeout"
           break
     result = "sat"
+    if res == "timeout" :
+      result = "timeout"
     with open(logname, "r") as logfile:
       if "unknown" in logfile.read() :
         result = "unknown"
@@ -70,7 +73,7 @@ for direc in dirs:
     csv_writer.writerow(row)
     files = glob.glob(example_dir + direc + "/*.smt2")
     shuffle(files)
-    for fil in files[:500]:
+    for fil in files[:100]:
       with open(fil, 'r') as ex:
         if ('Solvable: true' not in ex.read()):
           continue
