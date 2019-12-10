@@ -1,0 +1,6 @@
+(set-option :produce-models true)
+(set-logic QF_AUFBV )
+(declare-fun arr () (Array (_ BitVec 32) (_ BitVec 2)))
+(assert (= (bvand (bvor (bvnot (select arr (_ bv0 32))) (select arr (_ bv1 32))) (select arr (_ bv1 32))) (_ bv3 2)))
+(check-sat)
+(exit)

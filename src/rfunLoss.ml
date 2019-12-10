@@ -173,18 +173,23 @@ module Make () : RFun = struct
     let rec aux expr =
       let expr_id = Z3.AST.get_id (Z3.Expr.ast_of_expr expr) in
       try
-        Logger.log "Hit\n" ~level:`trace;
         IntTbl.find expr_tbl expr_id
       with Not_found ->
         if Z3.Boolean.is_true expr then (
+          (*(0, (Const (0.), [])))*)
           add_true ())
         else if Z3.Boolean.is_false expr then (
+          (*(0, (Const (0.), [])))*)
           add_false ())
         else if Z3.Expr.is_const expr then (
+          (*(0, (Const (0.), [])))*)
           let name = (Z3.Expr.to_string expr) in
           if not (List.mem name !vars) then (vars := name :: !vars);
           add_base name)
         else if Z3.Boolean.is_or expr then (
+          (*let args = List.map aux (Z3.Expr.get_args expr) in
+          Logger.log ~level:`trace (string_of_int (List.length args));
+          (0, (Const (0.), [])))*)
           let args = List.map aux (Z3.Expr.get_args expr) in
           let fold_fun (left_code, left_node) (right_code, right_node) =
             add_or left_code left_node right_code right_node
@@ -204,6 +209,9 @@ module Make () : RFun = struct
           IntTbl.add expr_tbl expr_id res;
           res)
         else if Z3.Boolean.is_and expr then (
+          (*let args = List.map aux (Z3.Expr.get_args expr) in
+          Logger.log ~level:`trace (string_of_int (List.length args));
+          (0, (Const (0.), [])))*)
           let args = List.map aux (Z3.Expr.get_args expr) in
           let fold_fun (left_code, left_node) (right_code, right_node) =
             add_and left_code left_node right_code right_node
@@ -224,12 +232,14 @@ module Make () : RFun = struct
           res)
         else if Z3.Boolean.is_not expr then (
           let child = List.nth (Z3.Expr.get_args expr) 0 in
+          (0, (Const (0.), [])))
+          (*let child = List.nth (Z3.Expr.get_args expr) 0 in
           if (Z3.Expr.is_const child) then
             let name = Z3.Expr.to_string child in
             if not (List.mem name !vars) then (vars := name :: !vars);
             add_base_not name
           else
-            failwith "Input formula wasn't in NNF")
+            failwith "Input formula wasn't in NNF")*)
         else if Z3.Boolean.is_eq expr then (
           let args = List.map aux (Z3.Expr.get_args expr) in
           let res = add_eq (fst (List.nth args 0)) (snd (List.nth args 0)) (fst (List.nth args 1)) (snd (List.nth args 1)) in

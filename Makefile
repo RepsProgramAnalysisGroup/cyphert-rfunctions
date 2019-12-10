@@ -1,5 +1,5 @@
 SOURCE_DIR = src
-OCB_FLAGS = -use-ocamlfind -package 'Z3' -package 'str' -package 'unix' -package 'ocamlgraph' -I $(SOURCE_DIR)
+OCB_FLAGS = -use-ocamlfind -tag 'thread' -package 'z3' -package 'str' -package 'unix' -package 'ocamlgraph' -I $(SOURCE_DIR)
 OCB = ocamlbuild
 
 all: native
