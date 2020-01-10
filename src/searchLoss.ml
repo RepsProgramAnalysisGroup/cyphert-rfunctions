@@ -10,23 +10,23 @@ module Make (A : sig val grad : unit -> float VarMap.t val eval : float VarMap.t
     ;;
   
   
-  let grad_search initial iterations =
+  let grad_search initial fixed iterations =
     let rec aux init iter =
       let value = Logger.log_time "Eval" A.eval !init in
-      (*Logger.log ~level:`debug ("current_value := " ^ (string_of_float value) ^ "\n");
-      Logger.log ~level:`debug ((VarMap.fold (fun key x y -> y ^ "\n" ^ key ^ " := " ^ (string_of_float x)) !init "") ^ "\n\n");*)
+      Logger.log ~level:`debug ("current_value := " ^ (string_of_float value) ^ "\n");
+      Logger.log ~level:`debug ((VarMap.fold (fun key x y -> y ^ "\n" ^ key ^ " := " ^ (string_of_float x)) !init "") ^ "\n\n");
       if (value = 0.) then (
         Some !init
       ) else if (iter = 0) then(
         None
       ) else (
         let grad = Logger.log_time "Grad" A.grad () in
-        (*Logger.log ~level:`debug "Gradient";
-        Logger.log ~level:`debug ((VarMap.fold (fun key x y -> y ^ "\n" ^ key ^ " := " ^ (string_of_float x)) grad "") ^ "\n\n");*)
+        Logger.log ~level:`debug "Gradient";
+        Logger.log ~level:`debug ((VarMap.fold (fun key x y -> y ^ "\n" ^ key ^ " := " ^ (string_of_float x)) grad "") ^ "\n\n");
         let update var x =
-          if x > 0. && (VarMap.find var !init) > 0. then
+          if x > 0. && (VarMap.find var !init) > 0. && not (VarMap.mem var fixed) then
             init := VarMap.update var (fun x -> Some 0.) !init
-          else if x < 0. && (VarMap.find var !init) < 1. then
+          else if x < 0. && (VarMap.find var !init) < 1. && not (VarMap.mem var fixed) then
             init := VarMap.update var (fun x -> Some 1.) !init
           else ()
         in
@@ -36,10 +36,10 @@ module Make (A : sig val grad : unit -> float VarMap.t val eval : float VarMap.t
       aux initial iterations
     ;;
   
-  let search init_opt vars ?(iter=50) () = 
-    match init_opt with
-    | None -> grad_search (init_map vars) iter
-    | Some x -> grad_search x iter
+  let search assign vars ?(iter=50) () = 
+    match assign with
+    | None -> grad_search (init_map vars) VarMap.empty iter
+    | Some x -> grad_search (ref (VarMap.union (fun key a b -> Some a) x !(init_map vars))) x iter
     ;;
   
 end

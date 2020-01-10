@@ -15,7 +15,7 @@ output_root = root_dir + "/test/output"
 
 tool_cmds = {
   "rsatloss":[root_dir + "/rsatLoss.native"],
-  "rsat2":[root_dir + "/rsat2.native"],
+  "rsatlosslist":[root_dir + "/rsatLossList.native"],
   "stp":["/home/turetsky/stp/build/stp"],
   "boolector":["/home/turetsky/boolector/build/bin/boolector"],
   "z3":["/home/turetsky/z3-Z3-4.8.5/build/z3"]

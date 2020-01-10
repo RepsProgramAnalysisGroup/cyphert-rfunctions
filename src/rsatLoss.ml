@@ -248,19 +248,31 @@ let aufbv2bool ctx expr =
   let new_g = Z3.Goal.mk_goal new_ctx false false false in
   Z3.Goal.add new_g [no_array];
   let bit_blasted = Z3.Goal.as_expr (Z3.Tactic.ApplyResult.get_subgoal (Z3.Tactic.apply sim_then_bit_then_nnf_then_prop new_g None) 0) in
-  (*Logger.log ("Bit blasted: " ^ (Z3.Expr.to_string bit_blasted) ^ "\n") ~level:`trace;*)
+  Logger.log ("Bit blasted: " ^ (Z3.Expr.to_string bit_blasted) ^ "\n") ~level:`trace;
   (new_ctx, bit_blasted)
   ;;
 
 module Search = SearchLoss.Make(Acta)
 
-let r_fun expr =
-  let variables = Logger.log_time "R-Construction" Acta.make_comp_graph expr in
-  Logger.log ("Number of free variables: " ^ (string_of_int (List.length variables)) ^ "\n") ~level:`debug;
-  let res = Logger.log_time "Search" (Search.search None variables ~iter:6) () in
-  (match res with
-    | None -> Logger.log ("unknown\n")
-    | Some _ -> Logger.log ("sat\n"));
+type status = 
+  | UNKNOWN
+  | SAT of float VarMap.t
+  | UNSAT
+
+let r_fun expr ctx =
+  let res = 
+    if (Z3.Expr.to_string expr = "false") then (Logger.log ("unsat\n"); UNSAT) (*Z3 bug. Z3 says false is a variable sometimes*)
+    else (
+      let (new_form, assign) = Optimize.remove_triv expr ctx in
+      Logger.log ("Optimized formula: " ^ (Z3.Expr.to_string new_form) ^ "\n") ~level:`trace;
+      let variables = Logger.log_time "R-Construction" Acta.make_comp_graph new_form in
+      Logger.log ("Number of free variables: " ^ (string_of_int (List.length variables)) ^ "\n") ~level:`debug;
+      let search_res = Logger.log_time "Search" (Search.search assign variables ~iter:6) () in
+      (match search_res with
+        | None -> Logger.log ("unknown\n"); UNKNOWN
+        | Some x -> Logger.log ("sat\n"); SAT x
+      )
+    ) in
   res
   ;;
 
@@ -291,11 +303,11 @@ let rec make_sentence ctx assign expr =
     Z3.Boolean.mk_eq ctx (List.nth subforms 0) (List.nth subforms 1))
   else ( failwith (Z3.Expr.to_string expr));;
 
-
 let r_test ctx assign expr =
   match assign with
-  | None -> "PASS"
-  | Some assig ->
+  | UNSAT -> "UNSAT"
+  | UNKNOWN -> "OKAY"
+  | SAT assig ->
     if Z3.Expr.to_string (Z3.Expr.simplify (make_sentence ctx assig expr) None) = "true" then "PASS"
     else "FAIL"
 
@@ -308,6 +320,7 @@ let test_rewrite old_ctx aufbv new_ctx sat =
 let log_out_file = ref false;;
 let test_assign = ref false;;
 let test_translate = ref false;;
+let no_array_theory = ref false;;
 
 let test arg = 
   match arg with
@@ -322,12 +335,14 @@ let setOut fileName =
 let sat_file in_file_name = 
   let ic = open_in in_file_name in
   let smt = read_file ic "" in
-  let (ctx, aufbv) = parse smt in
-  let (new_ctx, sat) = Logger.log_time "SMT2SAT" (aufbv2bool ctx) aufbv in
-  if !test_translate then Logger.log ((test_rewrite ctx aufbv new_ctx sat) ^ "\n")
-  else
-    (let res = r_fun sat in
-    if !test_assign then Logger.log ((r_test new_ctx res sat) ^ "\n"));
+  let (ctx, input_expr) = parse smt in
+  let bit_blast = fun () ->
+    if !no_array_theory then Bv2sat.bv2bool ctx input_expr
+    else Bv2sat.aufbv2bool ctx input_expr
+  in
+  let (new_ctx, sat) = Logger.log_time "SMT2SAT" bit_blast () in
+  let res = r_fun sat new_ctx in
+  if !test_assign then Logger.log ((r_test new_ctx res sat) ^ "\n");
   close_in ic;
   if (!log_out_file) then close_out !Logger.chan
   else ()
@@ -337,7 +352,8 @@ let register () =
   let speclist = [("-o", Arg.String setOut, "Set an output file"); 
                   ("-v", Arg.String Logger.set_level, "Set versbosity [trace | debug | always]");
                   ("-test", Arg.String test, "Test functionality [rewrite | assign]");
-                  ("-time", Arg.Set Logger.log_times, "Log execution times")] in
+                  ("-time", Arg.Set Logger.log_times, "Log execution times");
+                  ("-no_array", Arg.Set no_array_theory, "The input file is over the array theory")] in
   let usage = "rsat.native <smt2-file>" in
   Arg.parse speclist sat_file usage
 

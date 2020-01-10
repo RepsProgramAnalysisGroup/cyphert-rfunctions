@@ -1,12 +1,3 @@
-open Rfun2
-
-module Acta = Make (struct
-  let orFun = Plus (Plus (X, Y), Pow (Plus (Pow (X, 2.), Pow (Y, 2.)), 0.5))
-  let notFun = Times (Const (-1.), X)
-  let baseFun = Plus (X, Const (-0.5))
-  let andFun = Plus (Plus (X, Y), Times (Pow (Plus (Pow (X, 2.), Pow (Y, 2.)), 0.5), Const (-1.)))
-end)
-
 module Logger = Log
 
 module ExprPair = Map.Make(struct 
@@ -174,6 +165,30 @@ let remove_select expr =
       let args = List.map aux (Z3.Expr.get_args ex) in
       (*Logger.log "ASHR\n" ~level:`trace;*)
       Z3.BitVector.mk_ashr ctx (List.nth args 0) (List.nth args 1))
+    else if Z3.BitVector.is_bv_ule ex then (
+      let args = List.map aux (Z3.Expr.get_args ex) in
+      Z3.BitVector.mk_ule ctx (List.nth args 0) (List.nth args 1))
+    else if Z3.BitVector.is_bv_sle ex then (
+      let args = List.map aux (Z3.Expr.get_args ex) in
+      Z3.BitVector.mk_sle ctx (List.nth args 0) (List.nth args 1))
+    else if Z3.BitVector.is_bv_uge ex then (
+      let args = List.map aux (Z3.Expr.get_args ex) in
+      Z3.BitVector.mk_uge ctx (List.nth args 0) (List.nth args 1))
+    else if Z3.BitVector.is_bv_sge ex then (
+      let args = List.map aux (Z3.Expr.get_args ex) in
+      Z3.BitVector.mk_sge ctx (List.nth args 0) (List.nth args 1))
+    else if Z3.BitVector.is_bv_ult ex then (
+      let args = List.map aux (Z3.Expr.get_args ex) in
+      Z3.BitVector.mk_ult ctx (List.nth args 0) (List.nth args 1))
+    else if Z3.BitVector.is_bv_slt ex then (
+      let args = List.map aux (Z3.Expr.get_args ex) in
+      Z3.BitVector.mk_slt ctx (List.nth args 0) (List.nth args 1))
+    else if Z3.BitVector.is_bv_ugt ex then (
+      let args = List.map aux (Z3.Expr.get_args ex) in
+      Z3.BitVector.mk_ugt ctx (List.nth args 0) (List.nth args 1))
+    else if Z3.BitVector.is_bv_sgt ex then (
+      let args = List.map aux (Z3.Expr.get_args ex) in
+      Z3.BitVector.mk_sgt ctx (List.nth args 0) (List.nth args 1))
     else (
       if Z3.BitVector.is_bv_comp ex then (Logger.log "Comp\n")
       else if Z3.BitVector.is_bv_rotateleft ex then (Logger.log "rotateLeft\n")
@@ -207,30 +222,22 @@ let remove_select expr =
   (*(Z3.Boolean.mk_and ctx (constr), ctx)*)
 ;;
 
-let rec read_file in_channel res =
-  try
-    let line = input_line in_channel in
-    if (Str.string_match (Str.regexp "(get-value") line 0) then
-      read_file in_channel res
-    else
-      read_file in_channel (res ^ "\n" ^ line)
-  with End_of_file ->
-    res
-  ;;
-
-let rec print_sorts expr = 
-  Logger.log ((Z3.Sort.to_string (Z3.Expr.get_sort expr)) ^ "\n");
-  if (Z3.Expr.get_num_args expr) = 0 then ()
-  else 
-    List.iter print_sorts (Z3.Expr.get_args expr)
-  ;;
-
-let parse query = 
-  let ctx = Z3.mk_context [] in
-  let ast_vec = Logger.log_time "Parsing" (Z3.SMT.parse_smtlib2_string ctx query [] [] []) [] in
-  (ctx, Z3.Boolean.mk_and ctx (Z3.AST.ASTVector.to_expr_list ast_vec))
-  ;;
  
+let bv2bool ctx expr = 
+  let sim = Z3.Tactic.mk_tactic ctx "simplify" in
+  let bit = Z3.Tactic.mk_tactic ctx "bit-blast" in
+  let nnf = Z3.Tactic.mk_tactic ctx "nnf" in
+  let prop = Z3.Tactic.mk_tactic ctx "propagate-values" in
+  let sim_then_bit = Z3.Tactic.and_then ctx sim bit [] in
+  let sim_then_bit_then_nnf = Z3.Tactic.and_then ctx sim_then_bit nnf [] in
+  let sim_then_bit_then_nnf_then_prop = Z3.Tactic.and_then ctx sim_then_bit_then_nnf prop [] in
+  (*let sim_then_bit_then_nnf_then_prop = Z3.Tactic.and_then new_ctx sim_then_bit prop [] in*)
+  let new_g = Z3.Goal.mk_goal ctx false false false in
+  Z3.Goal.add new_g [expr];
+  let bit_blasted = Z3.Goal.as_expr (Z3.Tactic.ApplyResult.get_subgoal (Z3.Tactic.apply sim_then_bit_then_nnf_then_prop new_g None) 0) in
+  Logger.log ("Bit blasted: " ^ (Z3.Expr.to_string bit_blasted) ^ "\n") ~level:`trace;
+  (ctx, bit_blasted)
+
 let aufbv2bool ctx expr = 
   (*Logger.log ("Original query: " ^ (Z3.Expr.to_string expr) ^ "\n") ~level:`trace;*)
   let g = Z3.Goal.mk_goal ctx false false false in
@@ -243,107 +250,7 @@ let aufbv2bool ctx expr =
   (*Logger.log ("No store: " ^ (Z3.Expr.to_string no_store) ^ "\n") ~level:`trace;*)
   let (no_array, new_ctx) = remove_select no_store in
   (*Logger.log ("No array: " ^ (Z3.Expr.to_string no_array) ^ "\n") ~level:`trace;*)
-  let sim = Z3.Tactic.mk_tactic new_ctx "simplify" in
-  let bit = Z3.Tactic.mk_tactic new_ctx "bit-blast" in
-  let pre_proc = Z3.Tactic.mk_tactic new_ctx "propagate-values" in
-  let sim_then_bit = Z3.Tactic.and_then new_ctx sim bit [] in
-  let sim_then_bit_then_pre = Z3.Tactic.and_then new_ctx sim_then_bit pre_proc [] in
-  let new_g = Z3.Goal.mk_goal new_ctx false false false in
-  Z3.Goal.add new_g [no_array];
-  let bit_blasted = Z3.Goal.as_expr (Z3.Tactic.ApplyResult.get_subgoal (Z3.Tactic.apply sim_then_bit_then_pre new_g None) 0) in
-  (*Logger.log ("Bit blasted: " ^ (Z3.Expr.to_string bit_blasted) ^ "\n") ~level:`trace;*)
-  (new_ctx, bit_blasted)
+  let (_, blasted) = bv2bool new_ctx no_array in
+  (new_ctx, blasted)
   ;;
 
-module Search = Search2.Make(Acta)
-
-let r_fun expr =
-  let variables = Logger.log_time "R-Construction" Acta.make_comp_graph expr in
-  Logger.log ("Number of free variables: " ^ (string_of_int (List.length variables)) ^ "\n") ~level:`debug;
-  let res = Logger.log_time "Search" (Search.search None variables ~iter:6) () in
-  (match res with
-    | None -> Logger.log ("unknown\n")
-    | Some _ -> Logger.log ("sat\n"));
-  res
-  ;;
-
-
-let rec make_sentence ctx assign expr =
-  if Z3.Boolean.is_true expr then (
-    Z3.Boolean.mk_true ctx)
-  else if Z3.Boolean.is_false expr then (
-    Z3.Boolean.mk_false ctx)
-  else if Z3.Boolean.is_and expr then (
-    let subforms = List.map (fun ex -> make_sentence ctx assign ex) (Z3.Expr.get_args expr) in
-    Z3.Boolean.mk_and ctx subforms) 
-  else if Z3.Boolean.is_or expr then (
-    let subforms = List.map (fun ex -> make_sentence ctx assign ex) (Z3.Expr.get_args expr) in
-    Z3.Boolean.mk_or ctx subforms)
-  else if Z3.Boolean.is_not expr then (
-    let subform = make_sentence ctx assign (List.nth (Z3.Expr.get_args expr) 0) in
-    Z3.Boolean.mk_not ctx subform)
-  else if Z3.Expr.is_const expr then (
-    let name = Z3.Expr.to_string expr in
-    let v = VarMap.find name assign in
-    if v > 0.5 then
-      Z3.Boolean.mk_true ctx
-    else 
-      Z3.Boolean.mk_false ctx)
-  else if Z3.Boolean.is_eq expr then (
-    let subforms = List.map (fun ex -> make_sentence ctx assign ex) (Z3.Expr.get_args expr) in
-    Z3.Boolean.mk_eq ctx (List.nth subforms 0) (List.nth subforms 1))
-  else ( failwith (Z3.Expr.to_string expr));;
-
-
-let r_test ctx assign expr =
-  match assign with
-  | None -> "PASS"
-  | Some assig ->
-    if Z3.Expr.to_string (Z3.Expr.simplify (make_sentence ctx assig expr) None) = "true" then "PASS"
-    else "FAIL"
-
-let test_rewrite old_ctx aufbv new_ctx sat =
-  let old_solver = Z3.Solver.mk_solver old_ctx None in
-  let new_solver = Z3.Solver.mk_solver new_ctx None in
-  if (Z3.Solver.check old_solver [aufbv]) = (Z3.Solver.check new_solver [sat]) then "PASS"
-  else "FAIL"
-
-let log_out_file = ref false;;
-let test_assign = ref false;;
-let test_translate = ref false;;
-
-let test arg = 
-  match arg with
-  | "rewrite" -> test_translate := true
-  | "assign" -> test_assign := true
-  | _ -> failwith "Unknown testing argument"
-
-let setOut fileName = 
-  log_out_file := true;
-  Logger.set_chan (open_out fileName);;
-  
-let sat_file in_file_name = 
-  let ic = open_in in_file_name in
-  let smt = read_file ic "" in
-  let (ctx, aufbv) = parse smt in
-  let (new_ctx, sat) = Logger.log_time "SMT2SAT" (aufbv2bool ctx) aufbv in
-  if !test_translate then Logger.log ((test_rewrite ctx aufbv new_ctx sat) ^ "\n")
-  else
-    (let res = r_fun sat in
-    if !test_assign then Logger.log ((r_test new_ctx res sat) ^ "\n"));
-  close_in ic;
-  if (!log_out_file) then close_out !Logger.chan
-  else ()
-  ;;
-
-let register () = 
-  let speclist = [("-o", Arg.String setOut, "Set an output file"); 
-                  ("-v", Arg.String Logger.set_level, "Set versbosity [trace | debug | always]");
-                  ("-test", Arg.String test, "Test functionality [rewrite | assign]");
-                  ("-time", Arg.Set Logger.log_times, "Log execution times")] in
-  let usage = "rsat.native <smt2-file>" in
-  Arg.parse speclist sat_file usage
-
-let () =
-  register ()
-  ;;

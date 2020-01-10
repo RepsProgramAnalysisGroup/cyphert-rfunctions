@@ -10,36 +10,36 @@ files = alu + sprs + wbmux
 
 test = root_dir + "/rsatLoss.native"
 
-num_passed_rewrite = 0
-num_passed_assign = 0
+num_passed = 0
+num_okayed = 0
 num_tested = 0
 
-def run_example (example) :
+def run_example (example, is_sat) :
   m = re.split('/', example)
   nicename = m[-1]
-  res = subprocess.check_output([test] +['-test'] + ['rewrite']+ [example])
-  if ("PASS" in res.decode("utf-8")):
-    global num_passed_rewrite
-    num_passed_rewrite = num_passed_rewrite + 1
+  res = subprocess.check_output([test] + [example])
+  if (("sat" in res.decode("utf-8") and (not "unsat" in res.decode("utf-8")) and is_sat) or ("unsat" in res.decode("utf-8") and not is_sat)):
+    global num_passed
+    num_passed = num_passed + 1
+    print ("PASS on: " + example)
+  elif ("sat" in res.decode("utf-8") and not is_sat) :
+    print ("UNSOUND on: " + example)
   else :
-    print ("Failed rewrite on: " + example)
-  res = subprocess.check_output([test] +['-test'] + ['assign']+ [example])
-  if ("PASS" in res.decode("utf-8")):
-    global num_passed_assign
-    num_passed_assign = num_passed_assign + 1
-  else :
-    print ("Failed assign on: " + example)
+    print ("OKAY on: " + example)
+    global num_okayed
+    num_okayed = num_okayed + 1
   global num_tested
   num_tested = num_tested + 1
 
 
 
 for fil in files:
+  example_sat = True
   with open(fil, "r") as ex:
     if ('Solvable: true' not in ex.read()):
-      continue
-  run_example(fil)
+      example_sat = False
+  run_example(fil, example_sat)
 
-print("Number passed rewrite: " + str(num_passed_rewrite)) 
-print("Number passed assign: " + str(num_passed_assign)) 
+print("Number passed: " + str(num_passed)) 
+print("Number okayed: " + str(num_okayed)) 
 print("Number tested: " + str(num_tested)) 

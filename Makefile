@@ -2,16 +2,13 @@ SOURCE_DIR = src
 OCB_FLAGS = -use-ocamlfind -tag 'thread' -tag 'cclib(-lstdc++)' -package 'z3' -package 'str' -package 'unix' -package 'ocamlgraph' -I $(SOURCE_DIR)
 OCB = ocamlbuild
 
-all: native
+all: rsatlosslist rsatloss
 
 clean: 
 	$(OCB) -clean
 
-native:
-	$(OCB) $(OCB_FLAGS) rsat.native
-
-rsat2:
-	$(OCB) $(OCB_FLAGS) rsat2.native
-
 rsatloss:
 	$(OCB) $(OCB_FLAGS) rsatLoss.native
+
+rsatlosslist:
+	$(OCB) $(OCB_FLAGS) rsatLossList.native
