@@ -3,9 +3,13 @@ from random import shuffle
 
 root_dir = "/home/turetsky/cyphert-rfunctions"
 
-example_dir = "/home/turetsky/"
+example_dir = root_dir + "/test/examples/"
 
-dirs = ["pc-1"]
+dirs = ["alu", "sprs", "wbmux"]
+
+alu = glob.glob(example_dir + "/alu/*.smt2")
+sprs = glob.glob(example_dir + "/sprs/*.smt2")
+wbmux = glob.glob(example_dir + "/wbmux/*.smt2")
 
 output_root = root_dir + "/test/output"
 
@@ -126,8 +130,8 @@ for direc in dirs:
         row = row + [tool + ' res', tool + ' time']
     csv_writer.writerow(row)
     files = glob.glob(example_dir + direc + "/*.smt2")
-    shuffle(files)
-    for fil in files[:100]:
+    #shuffle(files)
+    for fil in files:#[:100]:
       #with open(fil, 'r') as ex:
       #  if ('Solvable: true' not in ex.read()):
       #    continue

@@ -1,6 +1,4 @@
-open RfunLossList
-
-module Rfun = Make ()
+module VarMap = Map.Make(String);;
 
 module Logger = Log
 
@@ -28,13 +26,33 @@ let parse query =
   (ctx, Z3.Boolean.mk_and ctx (Z3.AST.ASTVector.to_expr_list ast_vec))
   ;;
 
-
-module Search = SearchLossList.Make(Rfun)
+module DL2 = Loss.Make ()
+module DL2List = LossList.Make ()
+module SL = Search.Make(DL2)
+module SLL = Search.Make(DL2List)
+module LPLL = Search.Sum(SL)(SLL)
 
 type status = 
   | UNKNOWN
   | SAT of float VarMap.t
   | UNSAT
+
+let iterations = ref 6
+
+(*let r_fun expr ctx =
+  let res = 
+    if (Z3.Expr.to_string expr = "false") then (Logger.log ("unsat\n"); UNSAT) (*Z3 bug. Z3 says false is a variable sometimes*)
+    else (
+      let (new_form, assign) = Optimize.remove_triv expr ctx in
+      Logger.log ("Optimized formula: " ^ (Z3.Expr.to_string new_form) ^ "\n") ~level:`trace;
+      let search_res = Logger.log_time "Search" (Search.search new_form assign ~iter:!iterations) () in
+      (match search_res with
+        | None -> Logger.log ("unknown\n"); UNKNOWN
+        | Some x -> Logger.log ("sat\n"); SAT x
+      )
+    ) in
+  res
+  ;;*)
 
 let r_fun expr ctx =
   let res = 
@@ -42,7 +60,7 @@ let r_fun expr ctx =
     else (
       let (new_form, assign) = Optimize.remove_triv expr ctx in
       Logger.log ("Optimized formula: " ^ (Z3.Expr.to_string new_form) ^ "\n") ~level:`trace;
-      let search_res = Logger.log_time "Search" (Search.search new_form assign ~iter:6) () in
+      let search_res = Logger.log_time "Search" (LPLL.search new_form assign ~iter:!iterations) () in
       (match search_res with
         | None -> Logger.log ("unknown\n"); UNKNOWN
         | Some x -> Logger.log ("sat\n"); SAT x
@@ -77,7 +95,6 @@ let rec make_sentence ctx assign expr =
     let subforms = List.map (fun ex -> make_sentence ctx assign ex) (Z3.Expr.get_args expr) in
     Z3.Boolean.mk_eq ctx (List.nth subforms 0) (List.nth subforms 1))
   else ( failwith (Z3.Expr.to_string expr));;
-
 
 let r_test ctx assign expr =
   match assign with
@@ -129,7 +146,9 @@ let register () =
                   ("-v", Arg.String Logger.set_level, "Set versbosity [trace | debug | always]");
                   ("-test", Arg.String test, "Test functionality [rewrite | assign]");
                   ("-time", Arg.Set Logger.log_times, "Log execution times");
-                  ("-no_array", Arg.Set no_array_theory, "The input file is over the array theory")] in
+                  ("-i", Arg.Set_int iterations, "The number of search iterations. Default is 6");
+                  ("-no_array", Arg.Set no_array_theory, "The input file does not contain array terms");
+                  ("-wen_list", Arg.Clear LPLL.use_left, "Use a Wengert list")] in
   let usage = "rsat.native <smt2-file>" in
   Arg.parse speclist sat_file usage
 

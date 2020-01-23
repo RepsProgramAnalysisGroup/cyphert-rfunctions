@@ -8,7 +8,7 @@ wbmux = glob.glob(root_dir + "/test/examples/wbmux/*.smt2")
 
 files = alu + sprs + wbmux
 
-test = root_dir + "/rsatLoss.native"
+test = root_dir + "/rsat.native"
 
 num_passed = 0
 num_okayed = 0
@@ -17,8 +17,12 @@ num_tested = 0
 def run_example (example, is_sat) :
   m = re.split('/', example)
   nicename = m[-1]
-  res = subprocess.check_output([test] + [example])
-  if (("sat" in res.decode("utf-8") and (not "unsat" in res.decode("utf-8")) and is_sat) or ("unsat" in res.decode("utf-8") and not is_sat)):
+  res = subprocess.check_output([test] +["-wen_list"] + [example])
+  if ("unknown" in res.decode("utf-8")):
+    print ("OKAY on: " + example)
+    global num_okayed
+    num_okayed = num_okayed + 1
+  elif (("sat" in res.decode("utf-8") and (not "unsat" in res.decode("utf-8")) and is_sat) or ("unsat" in res.decode("utf-8") and not is_sat)):
     global num_passed
     num_passed = num_passed + 1
     print ("PASS on: " + example)

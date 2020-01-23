@@ -12,12 +12,13 @@ module type RFun = sig
   val eval_init : Z3.Expr.expr -> float VarMap.t option -> float -> float * string list
   val eval : float VarMap.t -> float
   val grad : unit -> float VarMap.t
+  val stopping_rule : float -> bool
+  val update : float -> float -> float
 end
 
 module Logger = Log
 
 module Make () : RFun = struct
-  
   type op = 
     | Add
     | Mult
@@ -401,6 +402,17 @@ module Make () : RFun = struct
     in
     List.iter aux !wen;
     !grad_map
+
+  let stopping_rule value = 
+    if value = 0. then true
+    else false
+
+  let update value gradient =
+    if gradient > 0. && value > 0. then
+      0.
+    else if gradient < 0. && value < 1. then
+      1.
+    else value
 end
 
 (*

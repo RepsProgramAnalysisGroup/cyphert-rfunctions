@@ -3,21 +3,22 @@ from random import shuffle
 
 root_dir = "/home/turetsky/cyphert-rfunctions"
 
-example_dir = "/home/turetsky/"
+example_dir = "/home/turetsky/QF_ABV/"
 
-dirs = ["pc-1"]
+#dirs = ["2018-Mann", "2019-Mann", "2019-Wolf-fmbench","bench_ab", "bmc-arrays", "brummayerbiere", "brummayerbiere2", "brummayerbiere3", "btfnt", "calc2", "dwp_formulas", "ecc", "egt", "jager", "klee-selected-smt2", "pipe", "platania", "sharing-is-caring", "stp", "stp_samples"]
+
+dirs = ["ecc", "egt", "jager", "sharing-is-caring", "stp", "stp_samples", "2018-Mann", "2019-Mann", "bench_ab", "bmc-arrays", "brummayerbiere", "brummayerbiere2", "brummayerbiere3", "btfnt", "calc2", "dwp_formulas"]
 
 output_root = root_dir + "/test/output"
 
 tool_cmds = {
-  "rsatloss":[root_dir + "/loss.native"],
   "rsatlosslist":[root_dir + "/lossList.native"],
   "stp":["/home/turetsky/stp/build/stp"],
   "boolector":["/home/turetsky/boolector/build/bin/boolector"],
   "z3":["/home/turetsky/z3-Z3-4.8.5/build/z3"]
 }
 
-timeout = 60.0
+timeout = 300.0
 
 timestamp = datetime.datetime.now().strftime("%Y/%m/%d at %H:%M:%S")
 
@@ -126,8 +127,8 @@ for direc in dirs:
         row = row + [tool + ' res', tool + ' time']
     csv_writer.writerow(row)
     files = glob.glob(example_dir + direc + "/*.smt2")
-    shuffle(files)
-    for fil in files[:100]:
+    #shuffle(files)
+    for fil in files:#[:100]:
       #with open(fil, 'r') as ex:
       #  if ('Solvable: true' not in ex.read()):
       #    continue

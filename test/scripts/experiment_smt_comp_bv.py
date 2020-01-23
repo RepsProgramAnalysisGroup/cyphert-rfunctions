@@ -3,16 +3,19 @@ from random import shuffle
 
 root_dir = "/home/turetsky/cyphert-rfunctions"
 
-example_dir = "/home/turetsky/QF_ABV/"
+example_dir = "/home/turetsky/QF_BV/"
 
-#dirs = ["2018-Mann", "2019-Mann", "2019-Wolf-fmbench","bench_ab", "bmc-arrays", "brummayerbiere", "brummayerbiere2", "brummayerbiere3", "btfnt", "calc2", "dwp_formulas", "ecc", "egt", "jager", "klee-selected-smt2", "pipe", "platania", "sharing-is-caring", "stp", "stp_samples"]
+dirs = os.listdir(example_dir)
 
-dirs = ["ecc", "egt", "jager", "sharing-is-caring", "stp", "stp_samples", "2018-Mann", "2019-Mann", "bench_ab", "bmc-arrays", "brummayerbiere", "brummayerbiere2", "brummayerbiere3", "btfnt", "calc2", "dwp_formulas"]
+dirs = dirs[1:] + [dirs[0]]
+
+print(dirs)
 
 output_root = root_dir + "/test/output"
 
 tool_cmds = {
-  "rsatlosslist":[root_dir + "/lossList.native"],
+  "rsatlosslist":[root_dir + "/lossList.native", "-no_array"],
+  "rsatloss":[root_dir + "/loss.native", "-no_array"],
   "stp":["/home/turetsky/stp/build/stp"],
   "boolector":["/home/turetsky/boolector/build/bin/boolector"],
   "z3":["/home/turetsky/z3-Z3-4.8.5/build/z3"]
@@ -51,6 +54,7 @@ def run_example (example, logpath, result_writer, row):
           break
         if tool_time >= timeout :
           res = "timeout"
+          child.kill()
           break
       logfile.flush()
     result = "unknown"
@@ -92,6 +96,7 @@ def check_solvable (example, logpath, result_writer):
         break
       if tool_time >= timeout :
         res = "timeout"
+        child.kill()
         break
     logfile.flush()
   result = "unknown"

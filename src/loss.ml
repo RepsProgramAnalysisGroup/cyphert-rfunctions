@@ -8,11 +8,13 @@ type rexpr =
   | Pow of rexpr * float
   | Const of float
 
-module type RFun = sig
-  val make_comp_graph : Z3.Expr.expr -> string list
-  val eval : float VarMap.t -> float
-  val grad : unit -> float VarMap.t
-end
+  module type RFun = sig
+    val eval_init : Z3.Expr.expr -> float VarMap.t option -> float -> float * string list
+    val eval : float VarMap.t -> float
+    val grad : unit -> float VarMap.t
+    val stopping_rule : float -> bool
+    val update : float -> float -> float
+  end
 
 module Logger = Log
 
@@ -331,6 +333,19 @@ module Make () : RFun = struct
     | Some r -> aux r
     | None -> failwith "Don't have root for evaluation"
 
+  let eval_init expr assign init = 
+    let full_assign = ref (match assign with | None -> VarMap.empty | Some map -> map) in
+    let vars = make_comp_graph expr in
+    List.iter (fun var ->
+      full_assign := VarMap.update var 
+        (fun value_opt -> match value_opt with
+          | None -> Some init
+          | Some x -> Some x 
+        ) !full_assign
+    ) vars;
+    let res = eval !full_assign in
+    (res, vars)
+
   let grad () = 
     let result_tbl = get_tbl () in
     let edge_tab = match !edge_tbl with | Some x -> x | None -> failwith "Don't have edge table" in
@@ -367,6 +382,18 @@ module Make () : RFun = struct
     Top.iter aux comp_graph;
     NodeTbl.clear result_tbl;
     !grad_map
+
+  let stopping_rule value = 
+    if value = 0. then true
+    else false
+  
+  let update value gradient =
+    if gradient > 0. && value > 0. then
+      0.
+    else if gradient < 0. && value < 1. then
+      1.
+    else value
+
 end
 
 (*
