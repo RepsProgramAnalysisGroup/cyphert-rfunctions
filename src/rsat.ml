@@ -26,11 +26,15 @@ let parse query =
   (ctx, Z3.Boolean.mk_and ctx (Z3.AST.ASTVector.to_expr_list ast_vec))
   ;;
 
-module DL2 = Loss.Make ()
+(*module DL2 = Loss.Make ()
 module DL2List = LossList.Make ()
 module SL = Search.Make(DL2)
 module SLL = Search.Make(DL2List)
-module LPLL = Search.Sum(SL)(SLL)
+module LPLL = Search.Sum(SL)(SLL)*)
+  
+
+module Rfunction = Translate.Make(Rfun.Make(GraphAD.Make ()))
+module RSearch = Search.Make(Rfunction)
 
 type status = 
   | UNKNOWN
@@ -60,7 +64,8 @@ let r_fun expr ctx =
     else (
       let (new_form, assign) = Optimize.remove_triv expr ctx in
       Logger.log ("Optimized formula: " ^ (Z3.Expr.to_string new_form) ^ "\n") ~level:`trace;
-      let search_res = Logger.log_time "Search" (LPLL.search new_form assign ~iter:!iterations) () in
+      let vars = Rfunction.embed new_form assign in
+      let search_res = Logger.log_time "Search" (RSearch.search vars 0. ~iter:!iterations) () in
       (match search_res with
         | None -> Logger.log ("unknown\n"); UNKNOWN
         | Some x -> Logger.log ("sat\n"); SAT x
@@ -147,8 +152,8 @@ let register () =
                   ("-test", Arg.String test, "Test functionality [rewrite | assign]");
                   ("-time", Arg.Set Logger.log_times, "Log execution times");
                   ("-i", Arg.Set_int iterations, "The number of search iterations. Default is 6");
-                  ("-no_array", Arg.Set no_array_theory, "The input file does not contain array terms");
-                  ("-wen_list", Arg.Clear LPLL.use_left, "Use a Wengert list")] in
+                  ("-no_array", Arg.Set no_array_theory, "The input file does not contain array terms")] in
+                  (*("-wen_list", Arg.Clear LPLL.use_left, "Use a Wengert list")] in*)
   let usage = "rsat.native <smt2-file>" in
   Arg.parse speclist sat_file usage
 

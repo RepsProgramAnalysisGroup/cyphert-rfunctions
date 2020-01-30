@@ -24,8 +24,8 @@ let remove_triv expr ctx =
         ))
       else ex :: new_args
       ) [] args in
-    if List.length new_form = 0 then (Z3.Boolean.mk_true ctx, Some !triv_assig)
-    else if List.length new_form = 1 then (List.nth new_form 0, Some !triv_assig)
-    else (Z3.Boolean.mk_and ctx new_form, Some !triv_assig)
+    if List.length new_form = 0 then (Z3.Boolean.mk_true ctx, !triv_assig)
+    else if List.length new_form = 1 then (List.nth new_form 0, !triv_assig)
+    else (Z3.Boolean.mk_and ctx new_form, !triv_assig)
   )
-  else (expr, None)
+  else (expr, VarMap.empty)
