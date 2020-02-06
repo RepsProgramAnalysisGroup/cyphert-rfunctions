@@ -12,8 +12,13 @@ module Make (A : Sigs.BoolEmb) : Sigs.BuildSearch = struct
 
   let make_base var = 
     let variable = A.make_var var in
-    let minus_half = A.make_const (-.0.5) in
-    A.make_add variable minus_half
+    let minus_one = A.make_const (- 1.) in
+    let var_minus_one = A.make_add variable minus_one in
+    A.make_exp var_minus_one 2.
+
+  let make_base_not var = 
+    let variable = A.make_var var in
+    A.make_exp variable 2.
 
   let embed ex set_vals =
     let vars = ref [] in
@@ -82,9 +87,12 @@ module Make (A : Sigs.BoolEmb) : Sigs.BuildSearch = struct
             A.make_false ())
           else if (Z3.Boolean.is_false child || Z3.Expr.to_string child = "false") then ( (*Shouldn't need to check explicitly true or false*)
             A.make_true ())
+          else if (Z3.Expr.is_const child) then (
+            let name = Z3.Expr.to_string child in
+            if not (List.mem name !vars) then (vars := name :: !vars);
+            make_base_not name)
           else (
-            let base = aux child in
-            A.make_not base))
+            A.make_not (aux child)))
         else if Z3.Boolean.is_eq expr then (
           let args = List.map aux (Z3.Expr.get_args expr) in
           let res = A.make_eq (List.nth args 0) (List.nth args 1) in

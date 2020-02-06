@@ -2,7 +2,7 @@ module VarMap = Map.Make(String);;
 
 module Logger = Log
 
-module Make () : AD.AD = struct
+module Make () : Sigs.AD = struct
   
   type op = 
     | OAdd

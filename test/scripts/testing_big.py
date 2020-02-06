@@ -17,7 +17,7 @@ num_tested = 0
 def run_example (example, is_sat) :
   m = re.split('/', example)
   nicename = m[-1]
-  res = subprocess.check_output([test] +["-wen_list"] + [example])
+  res = subprocess.check_output([test] + [example])
   if ("unknown" in res.decode("utf-8")):
     print ("OKAY on: " + example)
     global num_okayed

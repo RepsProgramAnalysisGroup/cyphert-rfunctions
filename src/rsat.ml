@@ -34,7 +34,9 @@ module LPLL = Search.Sum(SL)(SLL)*)
   
 
 module Rfunction = Translate.Make(Rfun.Make(GraphAD.Make ()))
-module RSearch = Search.Make(Rfunction)
+module Loss = Translateloss.Make(Loss.Make(GraphAD.Make ()))
+module MakeSearch (A: Sigs.BuildSearch) = struct include Search.Make(A) include A end
+module RSearch = MakeSearch(Rfunction)
 
 type status = 
   | UNKNOWN
@@ -64,7 +66,7 @@ let r_fun expr ctx =
     else (
       let (new_form, assign) = Optimize.remove_triv expr ctx in
       Logger.log ("Optimized formula: " ^ (Z3.Expr.to_string new_form) ^ "\n") ~level:`trace;
-      let vars = Rfunction.embed new_form assign in
+      let vars = RSearch.embed new_form assign in
       let search_res = Logger.log_time "Search" (RSearch.search vars 0. ~iter:!iterations) () in
       (match search_res with
         | None -> Logger.log ("unknown\n"); UNKNOWN
