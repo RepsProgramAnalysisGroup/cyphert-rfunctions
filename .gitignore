@@ -1,0 +1,5 @@
+.vscode/
+_build/
+*.native
+test/scripts/*.csv
+test/output/
