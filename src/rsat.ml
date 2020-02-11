@@ -2,6 +2,34 @@ module VarMap = Map.Make(String);;
 
 module Logger = Log
 
+(*module Loss = Translateloss.Make(Loss.Make(GraphAD.Make ()))
+module Rfunction = Translate.Make(Rfun.Make(GraphAD.Make ()))
+module MakeSearch (A: Sigs.BuildSearch) = struct include Search.Make(A) include A end
+module RSearch = MakeSearch(Rfunction)
+module RNonLin = MakeSearch(TranslateNL.Make(Rfun.Make(GraphAD.Make ())))*)
+
+module MakeSearch (A: Sigs.BuildSearch) = struct include Search.Make(A) include A end
+module RSearch = MakeSearch(Translate.MakeRfunBool(GraphAD.Make ()))
+module RNonLin = MakeSearch(Translate.MakeRfunArith(GraphAD.Make ()))
+
+type status = 
+  | UNKNOWN
+  | SAT of float VarMap.t
+  | UNSAT
+
+let iterations = ref 6
+
+let log_out_file = ref false
+
+let check_assign = ref false
+
+type theory = 
+  | Arith
+  | AUFBV
+  | BV
+
+let theory = ref BV;;
+
 let rec read_file in_channel res =
   try
     let line = input_line in_channel in
@@ -17,22 +45,26 @@ let parse query =
   let ctx = Z3.mk_context [] in
   let ast_vec = Logger.log_time "Parsing" (Z3.SMT.parse_smtlib2_string ctx query [] [] []) [] in
   (ctx, Z3.Boolean.mk_and ctx (Z3.AST.ASTVector.to_expr_list ast_vec))
-  ;;  
-
-module Rfunction = Translate.Make(Rfun.Make(GraphAD.Make ()))
-module Loss = Translateloss.Make(Loss.Make(GraphAD.Make ()))
-module MakeSearch (A: Sigs.BuildSearch) = struct include Search.Make(A) include A end
-module RSearch = MakeSearch(Rfunction)
-
-type status = 
-  | UNKNOWN
-  | SAT of float VarMap.t
-  | UNSAT
-
-let iterations = ref 6
+  ;;
 
 
-let r_fun expr ctx =
+let r_fun_arith expr ctx =
+  let res = 
+    if (Z3.Expr.to_string expr = "false") then (Logger.log ("unsat\n"); UNSAT) (*Z3 bug. Z3 says false is a variable sometimes*)
+    else (
+      let vars = RNonLin.embed expr VarMap.empty in
+      let search_res = Logger.log_time "Search" (RNonLin.search vars 0. ~iter:!iterations) () in
+      (match search_res with
+        | None -> Logger.log ("unknown\n"); UNKNOWN
+        | Some x -> Logger.log ("sat\n"); 
+        if !check_assign then (if (BoolEval.ArithEval.eval x expr) then Logger.log ~level:`always "Assignment was truly a model!\n"
+                                 else Logger.log ~level:`always "Solver gave an incorrect model\n");
+        SAT x
+      )
+    ) in
+  res
+
+let r_fun_bool expr ctx =
   let res = 
     if (Z3.Expr.to_string expr = "false") then (Logger.log ("unsat\n"); UNSAT) (*Z3 bug. Z3 says false is a variable sometimes*)
     else (
@@ -42,42 +74,59 @@ let r_fun expr ctx =
       let search_res = Logger.log_time "Search" (RSearch.search vars 0. ~iter:!iterations) () in
       (match search_res with
         | None -> Logger.log ("unknown\n"); UNKNOWN
-        | Some x -> Logger.log ("sat\n"); SAT x
+        | Some x -> Logger.log ("sat\n"); 
+          if !check_assign then (if (BoolEval.BoolEval.eval (VarMap.union (fun key a b -> failwith "Overloaded assignment") x assign) expr) then Logger.log ~level:`always "Assignment was truly a model!\n"
+                                 else Logger.log ~level:`always "Solver gave an incorrect model\n");
+          
+          SAT x
       )
     ) in
   res
-  ;;
+  
+let r_fun_bv expr ctx =
+  let bit_blast = fun () -> Bv2sat.bv2bool ctx expr in
+  let (new_ctx, sat) = Logger.log_time "BV2SAT" bit_blast () in
+  r_fun_bool sat new_ctx
+    
+let r_fun_aufbv expr ctx =
+  let bit_blast = fun () -> Bv2sat.aufbv2bool ctx expr in
+  let (new_ctx, sat) = Logger.log_time "AUFBV2SAT" bit_blast () in
+  r_fun_bool sat new_ctx
 
-
-let log_out_file = ref false;;
-let test_translate = ref false;;
-let no_array_theory = ref false;;
 
 let setOut fileName = 
   log_out_file := true;
   Logger.set_chan (open_out fileName);;
+
+let setTheory arg = 
+  match arg with
+  | "arith" -> theory := Arith
+  | "aufbv" -> theory := AUFBV
+  | "bv" -> theory := BV
+  | _ -> failwith "Unrecognized Theory"
   
+
 let sat_file in_file_name = 
   let ic = open_in in_file_name in
   let smt = read_file ic "" in
   let (ctx, input_expr) = parse smt in
-  let bit_blast = fun () ->
-    if !no_array_theory then Bv2sat.bv2bool ctx input_expr
-    else Bv2sat.aufbv2bool ctx input_expr
-  in
-  let (new_ctx, sat) = Logger.log_time "SMT2SAT" bit_blast () in
-  let res = r_fun sat new_ctx in
+  let res = (match !theory with
+    | Arith -> r_fun_arith input_expr ctx
+    | AUFBV -> r_fun_aufbv input_expr ctx
+    | BV -> r_fun_bv input_expr ctx
+  ) in
   close_in ic;
+
   if (!log_out_file) then close_out !Logger.chan
   else ()
-  ;;
 
 let register () = 
   let speclist = [("-o", Arg.String setOut, "Set an output file"); 
                   ("-v", Arg.String Logger.set_level, "Set versbosity [trace | debug | always]");
                   ("-time", Arg.Set Logger.log_times, "Log execution times");
                   ("-i", Arg.Set_int iterations, "The number of search iterations. Default is 6");
-                  ("-no_array", Arg.Set no_array_theory, "The input file does not contain array terms")] in
+                  ("-check_model", Arg.Set check_assign, "Check whether the model produced is a true model");
+                  ("-theory", Arg.String setTheory, "The theory solver to use [arith | aufbv | bv]")] in
   let usage = "rsat.native <smt2-file>" in
   Arg.parse speclist sat_file usage
 

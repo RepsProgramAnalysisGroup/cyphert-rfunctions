@@ -42,14 +42,7 @@ module Make (A : Sigs.AD) : Sigs.BoolEmb = struct
     make_or both_true both_false
 
   let stopping_rule value = 
-    if value > 0. then true
+    if value >= 0. then true
     else false
-  
-  let update value gradient =
-    if gradient < 0. && value > 0. then
-      0.
-    else if gradient > 0. && value < 1. then
-      1.
-    else value
 
 end

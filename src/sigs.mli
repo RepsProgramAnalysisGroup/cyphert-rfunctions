@@ -21,7 +21,6 @@ module type BoolEmb = sig
   val make_false : unit -> t
   val make_eq : t -> t -> t
   val stopping_rule : float -> bool
-  val update : float -> float -> float
 end
 
 module type BuildSearch = sig
