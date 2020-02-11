@@ -87,8 +87,6 @@ module Make () : Sigs.AD = struct
 
   let build_complete () =
     res_tbl := Some (NodeTbl.create (CGraph.nb_vertex comp_graph));
-    let _ = get_tbl () in
-    Logger.log ~level:`trace "Got Here\n";
     edge_tbl := Some (EdgeTbl.create (CGraph.nb_edges comp_graph))
 
   let eval assign =
