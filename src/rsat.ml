@@ -9,6 +9,7 @@ module RSearch = MakeSearch(Rfunction)
 module RNonLin = MakeSearch(TranslateNL.Make(Rfun.Make(GraphAD.Make ())))*)
 
 module MakeSearch (A: Sigs.BuildSearch) = struct include Search.Make(A) include A end
+module LSearch = MakeSearch(Translate.MakeLossBool(GraphAD.Make ()))
 module RSearch = MakeSearch(Translate.MakeRfunBool(GraphAD.Make ()))
 module RNonLin = MakeSearch(Translate.MakeRfunArith(GraphAD.Make ()))
 
@@ -52,7 +53,7 @@ let r_fun_arith expr ctx =
   let res = 
     if (Z3.Expr.to_string expr = "false") then (Logger.log ("unsat\n"); UNSAT) (*Z3 bug. Z3 says false is a variable sometimes*)
     else (
-      let vars = RNonLin.embed expr VarMap.empty in
+      let vars = RNonLin.embed ctx expr VarMap.empty in
       let search_res = Logger.log_time "Search" (RNonLin.search vars 0. ~iter:!iterations) () in
       (match search_res with
         | None -> Logger.log ("unknown\n"); UNKNOWN
@@ -70,12 +71,12 @@ let r_fun_bool expr ctx =
     else (
       let (new_form, assign) = Optimize.remove_triv expr ctx in
       Logger.log ("Optimized formula: " ^ (Z3.Expr.to_string new_form) ^ "\n") ~level:`trace;
-      let vars = RSearch.embed new_form assign in
+      let vars = RSearch.embed ctx new_form assign in
       let search_res = Logger.log_time "Search" (RSearch.search vars 0. ~iter:!iterations) () in
       (match search_res with
         | None -> Logger.log ("unknown\n"); UNKNOWN
         | Some x -> Logger.log ("sat\n"); 
-          if !check_assign then (if (BoolEval.BoolEval.eval (VarMap.union (fun key a b -> failwith "Overloaded assignment") x assign) expr) then Logger.log ~level:`always "Assignment was truly a model!\n"
+          if !check_assign then (if (BoolEval.RfunBoolEval.eval (VarMap.union (fun key a b -> failwith "Overloaded assignment") x assign) expr) then Logger.log ~level:`always "Assignment was truly a model!\n"
                                  else Logger.log ~level:`always "Solver gave an incorrect model\n");
           
           SAT x

@@ -226,15 +226,14 @@ let remove_select expr =
 let bv2bool ctx expr = 
   let sim = Z3.Tactic.mk_tactic ctx "simplify" in
   let bit = Z3.Tactic.mk_tactic ctx "bit-blast" in
-  let nnf = Z3.Tactic.mk_tactic ctx "nnf" in
   let prop = Z3.Tactic.mk_tactic ctx "propagate-values" in
   let sim_then_bit = Z3.Tactic.and_then ctx sim bit [] in
-  let sim_then_bit_then_nnf = Z3.Tactic.and_then ctx sim_then_bit nnf [] in
-  let sim_then_bit_then_nnf_then_prop = Z3.Tactic.and_then ctx sim_then_bit_then_nnf prop [] in
+  let sim_then_bit_then_prop = Z3.Tactic.and_then ctx sim_then_bit prop [] in
+  (*let sim_then_bit_then_nnf_then_prop = Z3.Tactic.and_then ctx sim_then_bit_then_nnf prop [] in*)
   (*let sim_then_bit_then_nnf_then_prop = Z3.Tactic.and_then new_ctx sim_then_bit prop [] in*)
   let new_g = Z3.Goal.mk_goal ctx false false false in
   Z3.Goal.add new_g [expr];
-  let bit_blasted = Z3.Goal.as_expr (Z3.Tactic.ApplyResult.get_subgoal (Z3.Tactic.apply sim_then_bit_then_nnf_then_prop new_g None) 0) in
+  let bit_blasted = Z3.Goal.as_expr (Z3.Tactic.ApplyResult.get_subgoal (Z3.Tactic.apply sim_then_bit_then_prop new_g None) 0) in
   Logger.log ("Bit blasted: " ^ (Z3.Expr.to_string bit_blasted) ^ "\n") ~level:`trace;
   (ctx, bit_blasted)
 

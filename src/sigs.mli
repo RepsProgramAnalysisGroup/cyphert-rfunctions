@@ -24,7 +24,7 @@ module type BoolEmb = sig
 end
 
 module type BuildSearch = sig
-  val embed : Z3.Expr.expr -> float Map.Make(String).t -> string list
+  val embed : Z3.context -> Z3.Expr.expr -> float Map.Make(String).t -> string list
   val eval : float Map.Make(String).t -> float
   val grad : unit -> float Map.Make(String).t
   val stopping_rule : float -> bool

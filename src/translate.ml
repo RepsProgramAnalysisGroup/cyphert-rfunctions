@@ -7,6 +7,7 @@ module type Base = sig
   type t
   val update : float -> float -> float
   val make_base : Z3.Expr.expr -> float VarMap.t -> t * string list
+  val make_base_not : (Z3.Expr.expr -> float VarMap.t -> t * string list) option
 end
 
 module BoolRfun (A : Sigs.BoolEmb) : (Base with type t = A.t) = struct
@@ -31,6 +32,48 @@ module BoolRfun (A : Sigs.BoolEmb) : (Base with type t = A.t) = struct
         let minus_half = A.make_const (-.0.5) in
         (A.make_add variable minus_half, [name]))
     else failwith ("unknown Expr node: \n" ^ (Z3.Expr.to_string expr))
+
+  let make_base_not = None
+
+end
+
+module BoolLoss (A : Sigs.BoolEmb) : (Base with type t = A.t) = struct
+  type t = A.t
+
+  let update value gradient =
+    if gradient > 0. && value > 0. then
+      0.
+    else if gradient < 0. && value < 1. then
+      1.
+    else value
+
+  let make_base expr set_vals = 
+    if Z3.Expr.is_const expr then (
+      let name = (Z3.Expr.to_string expr) in
+      try
+        let value = VarMap.find name set_vals in
+        if value = 0. then (A.make_true (), [])
+        else (A.make_false (), [])
+      with Not_found ->
+        let variable = A.make_var name in
+        let minus_1 = A.make_const (- 1.) in
+        let var_minus_1 = A.make_add variable minus_1 in
+        (A.make_exp var_minus_1 2., [name]))
+    else failwith ("unknown Expr node: \n" ^ (Z3.Expr.to_string expr))
+
+  let make_base_not = Some (fun expr set_vals ->
+    if Z3.Expr.is_const expr then (
+      let name = (Z3.Expr.to_string expr) in
+      try
+        let value = VarMap.find name set_vals in
+        if value = 0. then (A.make_false (), [])
+        else (A.make_true (), [])
+      with Not_found ->
+        let variable = A.make_var name in
+        (A.make_exp variable 2., [name]))
+    else failwith ("unknown Expr node: \n" ^ (Z3.Expr.to_string expr))
+  )
+
 end
 
 module ArithRfun (A : Sigs.BoolEmb) : (Base with type t = A.t) = struct
@@ -110,8 +153,9 @@ module ArithRfun (A : Sigs.BoolEmb) : (Base with type t = A.t) = struct
       (make_gt right left, !vars))
     else failwith ("Unknown Predicate: " ^ (Z3.Expr.to_string expr))
 
-end
+  let make_base_not = None
 
+end
 
 module Make (A : Sigs.BoolEmb)(B : Base with type t = A.t) : Sigs.BuildSearch = struct
   
@@ -119,11 +163,20 @@ module Make (A : Sigs.BoolEmb)(B : Base with type t = A.t) : Sigs.BuildSearch = 
 
   let update = B.update
 
+  let need_nnf = match B.make_base_not with | None -> false | Some _ -> true
+
+  let rewrite_nnf ctx expr = 
+    let nnf = Z3.Tactic.mk_tactic ctx "nnf" in
+    let new_g = Z3.Goal.mk_goal ctx false false false in
+    Z3.Goal.add new_g [expr];
+    Z3.Goal.as_expr (Z3.Tactic.ApplyResult.get_subgoal (Z3.Tactic.apply nnf new_g None) 0)
+
   module IntTbl = Hashtbl.Make(struct type t = int let equal = (=) let hash = Hashtbl.hash end)
 
   let expr_tbl = IntTbl.create 1000
 
-  let embed ex set_vals =
+  let embed ctx ex set_vals =
+    let ex = if need_nnf then rewrite_nnf ctx ex else ex in
     let vars = ref [] in
     let rec aux expr =
       let expr_id = Z3.AST.get_id (Z3.Expr.ast_of_expr expr) in
@@ -186,8 +239,17 @@ module Make (A : Sigs.BoolEmb)(B : Base with type t = A.t) : Sigs.BuildSearch = 
           else if (Z3.Boolean.is_false child || Z3.Expr.to_string child = "false") then ( (*Shouldn't need to check explicitly true or false*)
             A.make_true ())
           else (
-            let base = aux child in
-            A.make_not base))
+            if need_nnf then (
+              match B.make_base_not with 
+              | None -> failwith "This shouldn't be possible" 
+              | Some f -> 
+                let (res, variables) = f child set_vals in
+                let unique_vars = List.filter (fun a -> not (List.mem a !vars)) variables in
+                vars := !vars @ unique_vars;
+                res
+            ) else
+              let base = aux child in
+              A.make_not base))
         else if Z3.Boolean.is_eq expr then (
           let args = List.map aux (Z3.Expr.get_args expr) in
           let res = A.make_eq (List.nth args 0) (List.nth args 1) in
@@ -208,3 +270,5 @@ end
 module MakeRfunArith (A : Sigs.AD) = struct module X = Rfun.Make(A) include Make(X)(ArithRfun(X)) end
 
 module MakeRfunBool (A : Sigs.AD) = struct module X = Rfun.Make(A) include Make(X)(BoolRfun(X)) end
+
+module MakeLossBool (A : Sigs.AD) = struct module X = Loss.Make(A) include Make(X)(BoolLoss(X)) end

@@ -31,7 +31,7 @@ module Make (A : sig val eval_base : float VarMap.t -> Z3.Expr.expr -> bool end)
 
 end
 
-module Boolean = struct
+module RfunBoolean = struct
   let eval_base assignment expr = 
     if Z3.Expr.is_const expr then (
       let name = (Z3.Expr.to_string expr) in
@@ -80,6 +80,6 @@ module Arithmetic = struct
     else failwith ("Unrecognized arithmetic predicate: " ^ (Z3.Expr.to_string expr))
 end
 
-module BoolEval = Make(Boolean)
+module RfunBoolEval = Make(RfunBoolean)
 
 module ArithEval = Make(Arithmetic)

@@ -17,12 +17,12 @@ num_tested = 0
 def run_example (example, is_sat) :
   m = re.split('/', example)
   nicename = m[-1]
-  res = subprocess.check_output([test] + [example])
+  res = subprocess.check_output([test] + ["-theory","aufbv","-check_model",example])
   if ("unknown" in res.decode("utf-8")):
     print ("OKAY on: " + example)
     global num_okayed
     num_okayed = num_okayed + 1
-  elif (("sat" in res.decode("utf-8") and (not "unsat" in res.decode("utf-8")) and is_sat) or ("unsat" in res.decode("utf-8") and not is_sat)):
+  elif (("sat" in res.decode("utf-8") and (not "unsat" in res.decode("utf-8")) and ("ssignment was truly a model" in res.decode("utf-8"))) or ("unsat" in res.decode("utf-8") and not is_sat)):
     global num_passed
     num_passed = num_passed + 1
     print ("PASS on: " + example)
