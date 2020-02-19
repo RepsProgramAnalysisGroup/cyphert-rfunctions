@@ -12,7 +12,8 @@ module Make (A : Sigs.AD) : Sigs.BoolEmb = struct
     let right_sq = A.make_exp right 2. in
     let left_sq_plus_right_sq = A.make_add left_sq right_sq in
     let square_root = A.make_exp left_sq_plus_right_sq 0.5 in
-    A.make_add left_plus_right square_root
+    let left_term = A.make_add left_plus_right square_root in
+    A.make_mult left_term left_sq_plus_right_sq
     
   let make_and left right =
     let left_plus_right = A.make_add left right in
@@ -22,7 +23,8 @@ module Make (A : Sigs.AD) : Sigs.BoolEmb = struct
     let square_root = A.make_exp left_sq_plus_right_sq 0.5 in
     let minus_1 = A.make_const (-.1.) in
     let neg_sqrt = A.make_mult square_root minus_1 in
-    A.make_add left_plus_right neg_sqrt
+    let left_term = A.make_add left_plus_right neg_sqrt in
+    A.make_mult left_term left_sq_plus_right_sq
 
   let make_not base =
     let minus_1 = A.make_const (-.1.) in
