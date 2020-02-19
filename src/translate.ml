@@ -8,6 +8,7 @@ module type Base = sig
   val update : float -> float -> float
   val make_base : Z3.Expr.expr -> float VarMap.t -> t * string list
   val make_base_not : (Z3.Expr.expr -> float VarMap.t -> t * string list) option
+  val make_equals : Z3.Expr.expr -> Z3.Expr.expr -> float VarMap.t -> t * string list
 end
 
 module BoolRfun (A : Sigs.BoolEmb) : (Base with type t = A.t) = struct
@@ -34,6 +35,8 @@ module BoolRfun (A : Sigs.BoolEmb) : (Base with type t = A.t) = struct
     else failwith ("unknown Expr node: \n" ^ (Z3.Expr.to_string expr))
 
   let make_base_not = None
+
+  let make_equals x y z = failwith "Boolean Equals should be Covered in Make"
 
 end
 
@@ -74,13 +77,21 @@ module BoolLoss (A : Sigs.BoolEmb) : (Base with type t = A.t) = struct
     else failwith ("unknown Expr node: \n" ^ (Z3.Expr.to_string expr))
   )
 
+  let make_equals x y z = failwith "Boolean Equals should be Covered in Make"
+
 end
 
 module ArithRfun (A : Sigs.BoolEmb) : (Base with type t = A.t) = struct
   type t = A.t
 
+  let step_size = 0.01
+
   let update value gradient =
-    value +. gradient
+    if gradient < 0. then
+      value -. step_size
+    else if gradient > 0. then
+      value +. step_size
+    else value
 
   let vars = ref []
 
@@ -153,6 +164,11 @@ module ArithRfun (A : Sigs.BoolEmb) : (Base with type t = A.t) = struct
       (make_gt right left, !vars))
     else failwith ("Unknown Predicate: " ^ (Z3.Expr.to_string expr))
 
+  let make_equals left right dummy = 
+    vars := [];
+    let (left_fun, right_fun) = (translate_fun left, translate_fun right) in
+    (make_equal left_fun right_fun, !vars)
+  
   let make_base_not = None
 
 end
@@ -246,19 +262,32 @@ module Make (A : Sigs.BoolEmb)(B : Base with type t = A.t) : Sigs.BuildSearch = 
                 let (res, variables) = f child set_vals in
                 let unique_vars = List.filter (fun a -> not (List.mem a !vars)) variables in
                 vars := !vars @ unique_vars;
+                IntTbl.add expr_tbl expr_id res;
                 res
             ) else
               let base = aux child in
-              A.make_not base))
-        else if Z3.Boolean.is_eq expr then (
-          let args = List.map aux (Z3.Expr.get_args expr) in
-          let res = A.make_eq (List.nth args 0) (List.nth args 1) in
-          IntTbl.add expr_tbl expr_id res;
-          res)
+              let res = A.make_not base in
+              IntTbl.add expr_tbl expr_id res;
+              res))
+        else if Z3.Boolean.is_eq expr then ( (* I think this is what is meant for an eq in a formula*)
+          let args = Z3.Expr.get_args expr in
+          if Z3.Sort.get_sort_kind (Z3.Expr.get_sort (List.nth args 0)) = Z3enums.BOOL_SORT then (
+            let args = List.map aux (Z3.Expr.get_args expr) in
+            let res = A.make_eq (List.nth args 0) (List.nth args 1) in
+            IntTbl.add expr_tbl expr_id res;
+            res)
+          else (
+            let (res, variables) = B.make_equals (List.nth args 0) (List.nth args 1) set_vals in
+            let unique_vars = List.filter (fun a -> not (List.mem a !vars)) variables in
+            vars := !vars @ unique_vars;
+            IntTbl.add expr_tbl expr_id res;
+            res)
+          )
         else (
           let (res, variables) = B.make_base expr set_vals in
           let unique_vars = List.filter (fun a -> not (List.mem a !vars)) variables in
           vars := !vars @ unique_vars;
+          IntTbl.add expr_tbl expr_id res;
           res)
     in
     let _ = aux ex in

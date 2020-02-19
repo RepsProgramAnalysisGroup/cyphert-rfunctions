@@ -54,7 +54,7 @@ let r_fun_arith expr ctx =
     if (Z3.Expr.to_string expr = "false") then (Logger.log ("unsat\n"); UNSAT) (*Z3 bug. Z3 says false is a variable sometimes*)
     else (
       let vars = RNonLin.embed ctx expr VarMap.empty in
-      let search_res = Logger.log_time "Search" (RNonLin.search vars 0. ~iter:!iterations) () in
+      let search_res = Logger.log_time "Search" (RNonLin.search vars 1. ~iter:!iterations) () in
       (match search_res with
         | None -> Logger.log ("unknown\n"); UNKNOWN
         | Some x -> Logger.log ("sat\n"); 

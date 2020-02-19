@@ -2,7 +2,7 @@
 (set-logic QF_LRA )
 (declare-fun x () Real)
 (declare-fun y () Real)
-(assert (>= (+ x y) (* 3 y)))
+(assert (and (<= (+ x y) (+ (* 3 y) 1)) (>= (+ x y) (* 3 y))))
 (check-sat)
 (get-model)
 (exit)
