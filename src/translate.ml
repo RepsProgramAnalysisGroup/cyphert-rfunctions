@@ -173,6 +173,123 @@ module ArithRfun (A : Sigs.BoolEmb) : (Base with type t = A.t) = struct
 
 end
 
+module ArithLoss (A : Sigs.BoolEmb) : (Base with type t = A.t) = struct
+  type t = A.t
+
+  let step_size = 0.01
+
+  let update value gradient =
+    if gradient > 0. then
+      value -. step_size
+    else if gradient < 0. then
+      value +. step_size
+    else value
+
+  let vars = ref []
+
+  let rec translate_fun expr = 
+    if Z3.Arithmetic.is_arithmetic_numeral expr then (
+      let value = float_of_string (Z3.Expr.to_string expr) in
+      A.make_const value)
+    else if Z3.Expr.is_const expr then (
+      let name = (Z3.Expr.to_string expr) in
+      if not (List.mem name !vars) then (vars := name :: !vars);
+      A.make_var name)
+    else if Z3.Arithmetic.is_add expr then (
+      let children = List.map translate_fun (Z3.Expr.get_args expr) in
+      List.fold_left A.make_add (List.hd children) (List.tl children))
+    else if Z3.Arithmetic.is_mul expr then (
+      let children = List.map translate_fun (Z3.Expr.get_args expr) in
+      List.fold_left A.make_mult (List.hd children) (List.tl children))
+      else if Z3.Arithmetic.is_uminus expr then (
+      let child = translate_fun (List.nth (Z3.Expr.get_args expr) 0) in
+      let minus_1 = A.make_const (-1.) in
+      A.make_mult child minus_1)
+    else if Z3.Arithmetic.is_sub expr then (
+      let children = List.map translate_fun (Z3.Expr.get_args expr) in
+      let left = List.nth children 0 in
+      let neg_right = A.make_mult (List.nth children 1) (A.make_const (-1.)) in
+      A.make_add left neg_right)
+    else if Z3.Arithmetic.is_div expr then (
+      let children = List.map translate_fun (Z3.Expr.get_args expr) in
+      A.make_div (List.nth children 0) (List.nth children 1))
+    else if Z3.Arithmetic.is_int2real expr then (
+      let value = float_of_string (Z3.Expr.to_string (List.nth (Z3.Expr.get_args expr) 0)) in
+      A.make_const value)
+    else if Z3.Arithmetic.is_real expr then (
+      let value = float_of_string (Z3.Expr.to_string expr) in
+      A.make_const value)
+    else failwith ("Unsupported base function: " ^ (Z3.Expr.to_string expr))
+  
+  let make_ge left_fun right_fun =
+    let right_minus_left = A.make_add right_fun (A.make_mult (A.make_const (-1.)) left_fun) in
+    let rml_squared = A.make_exp right_minus_left 2. in
+    let term_sqrt = A.make_exp rml_squared (0.5) in
+    A.make_add right_minus_left term_sqrt
+  
+  let make_equal left_fun right_fun =
+    let l_ge_r = make_ge left_fun right_fun in
+    let r_ge_l = make_ge right_fun left_fun in
+    A.make_and l_ge_r r_ge_l
+  
+  let make_not_equal left_fun right_fun = failwith "Need to figure this out" (*TODO*)
+
+  let make_gt left_fun right_fun = 
+    let ge = make_ge left_fun right_fun in
+    let neq = make_not_equal left_fun right_fun in
+    A.make_and ge neq
+  
+  let make_base expr dummy = 
+    vars := [];
+    if Z3.Arithmetic.is_ge expr then (
+      let children = Z3.Expr.get_args expr in
+      let (left, right) = (translate_fun (List.nth children 0), translate_fun (List.nth children 1)) in
+      (make_ge left right, !vars))
+    else if Z3.Arithmetic.is_le expr then (
+      let children = Z3.Expr.get_args expr in
+      let (left, right) = (translate_fun (List.nth children 0), translate_fun (List.nth children 1)) in
+      (make_ge right left, !vars))
+    else if Z3.Arithmetic.is_gt expr then (
+      let children = Z3.Expr.get_args expr in
+      let (left, right) = (translate_fun (List.nth children 0), translate_fun (List.nth children 1)) in
+      (make_gt left right, !vars))
+    else if Z3.Arithmetic.is_lt expr then (
+      let children = Z3.Expr.get_args expr in
+      let (left, right) = (translate_fun (List.nth children 0), translate_fun (List.nth children 1)) in
+      (make_gt right left, !vars))
+    else failwith ("Unknown Predicate: " ^ (Z3.Expr.to_string expr))
+
+  let make_equals left right dummy = 
+    vars := [];
+    let (left_fun, right_fun) = (translate_fun left, translate_fun right) in
+    (make_equal left_fun right_fun, !vars)
+  
+  let make_base_not = Some (fun expr dummy ->
+    vars := [];
+    if Z3.Arithmetic.is_ge expr then (
+      let children = Z3.Expr.get_args expr in
+      let (left, right) = (translate_fun (List.nth children 0), translate_fun (List.nth children 1)) in
+      (make_gt right left, !vars))
+    else if Z3.Arithmetic.is_le expr then (
+      let children = Z3.Expr.get_args expr in
+      let (left, right) = (translate_fun (List.nth children 0), translate_fun (List.nth children 1)) in
+      (make_gt left right, !vars))
+    else if Z3.Arithmetic.is_gt expr then (
+      let children = Z3.Expr.get_args expr in
+      let (left, right) = (translate_fun (List.nth children 0), translate_fun (List.nth children 1)) in
+      (make_ge right left, !vars))
+    else if Z3.Arithmetic.is_lt expr then (
+      let children = Z3.Expr.get_args expr in
+      let (left, right) = (translate_fun (List.nth children 0), translate_fun (List.nth children 1)) in
+      (make_ge left right, !vars))
+    else if Z3.Boolean.is_eq expr then (
+      let children = Z3.Expr.get_args expr in
+      let (left, right) = (translate_fun (List.nth children 0), translate_fun (List.nth children 1)) in
+      (make_not_equal left right, !vars))
+    else failwith ("Unknown Predicate: " ^ (Z3.Expr.to_string expr)))
+
+end
+
 module Make (A : Sigs.BoolEmb)(B : Base with type t = A.t) : Sigs.BuildSearch = struct
   
   include A
@@ -301,3 +418,5 @@ module MakeRfunArith (A : Sigs.AD) = struct module X = Rfun.Make(A) include Make
 module MakeRfunBool (A : Sigs.AD) = struct module X = Rfun.Make(A) include Make(X)(BoolRfun(X)) end
 
 module MakeLossBool (A : Sigs.AD) = struct module X = Loss.Make(A) include Make(X)(BoolLoss(X)) end
+
+module MakeLossArith (A : Sigs.AD) = struct module X = Loss.Make(A) include Make(X)(ArithLoss(X)) end
