@@ -2,20 +2,26 @@ module VarMap = Map.Make(String);;
 
 module Logger = Log
 
-(*module Loss = Translateloss.Make(Loss.Make(GraphAD.Make ()))
-module Rfunction = Translate.Make(Rfun.Make(GraphAD.Make ()))
-module MakeSearch (A: Sigs.BuildSearch) = struct include Search.Make(A) include A end
-module RSearch = MakeSearch(Rfunction)
-module RNonLin = MakeSearch(TranslateNL.Make(Rfun.Make(GraphAD.Make ())))*)
 
-module MakeSearch (A: Sigs.BuildSearch) = struct include Search.Make(A) include A end
-module LSearch = MakeSearch(Translate.MakeLossBool(GraphAD.Make ()))
-module RSearch = MakeSearch(Translate.MakeRfunBool(GraphAD.Make ()))
-module RNonLin = MakeSearch(Translate.MakeRfunArith(GraphAD.Make ()))
+module FloatDT = struct 
+  type t = float
+  let add = (+.)
+  let mult = ( *. )
+  let div = (/.)
+  let exp = ( ** )
+  let const = float_of_string
+  let to_string = string_of_float
+  let compare = compare 
+end
+
+module MakeSearch (A: Sigs.BuildSearch) = struct include Search.Make(A) let embed = A.embed let from_string = A.from_string let to_string = A.to_string end
+module RSearch = MakeSearch(Translate.MakeRfunBool(GraphAD.Make(FloatDT)))
+module RNonLin = MakeSearch(Translate.MakeRfunArith(GraphAD.Make(FloatDT)))
+
 
 type status = 
   | UNKNOWN
-  | SAT of float VarMap.t
+  | SAT of string VarMap.t
   | UNSAT
 
 let iterations = ref 6
@@ -54,13 +60,13 @@ let r_fun_arith expr ctx =
     if (Z3.Expr.to_string expr = "false") then (Logger.log ("unsat\n"); UNSAT) (*Z3 bug. Z3 says false is a variable sometimes*)
     else (
       let vars = RNonLin.embed ctx expr VarMap.empty in
-      let search_res = Logger.log_time "Search" (RNonLin.search vars 1. ~iter:!iterations) () in
+      let search_res = Logger.log_time "Search" (RNonLin.search vars (RNonLin.from_string "1") ~iter:!iterations) () in
       (match search_res with
         | None -> Logger.log ("unknown\n"); UNKNOWN
         | Some x -> Logger.log ("sat\n"); 
-        if !check_assign then (if (BoolEval.ArithEval.eval x expr) then Logger.log ~level:`always "Assignment was truly a model!\n"
-                                 else Logger.log ~level:`always "Solver gave an incorrect model\n");
-        SAT x
+        (*if !check_assign then (if (BoolEval.ArithEval.eval x expr) then Logger.log ~level:`always "Assignment was truly a model!\n"
+                                 else Logger.log ~level:`always "Solver gave an incorrect model\n");*)
+        SAT (VarMap.map RNonLin.to_string x)
       )
     ) in
   res
@@ -69,17 +75,17 @@ let r_fun_bool expr ctx =
   let res = 
     if (Z3.Expr.to_string expr = "false") then (Logger.log ("unsat\n"); UNSAT) (*Z3 bug. Z3 says false is a variable sometimes*)
     else (
-      let (new_form, assign) = Optimize.remove_triv expr ctx in
-      Logger.log ("Optimized formula: " ^ (Z3.Expr.to_string new_form) ^ "\n") ~level:`trace;
-      let vars = RSearch.embed ctx new_form assign in
-      let search_res = Logger.log_time "Search" (RSearch.search vars 0. ~iter:!iterations) () in
+      (*let (new_form, assign) = Optimize.remove_triv expr ctx in
+      Logger.log ("Optimized formula: " ^ (Z3.Expr.to_string new_form) ^ "\n") ~level:`trace;*)
+      let vars = RSearch.embed ctx expr VarMap.empty in
+      let search_res = Logger.log_time "Search" (RSearch.search vars (RSearch.from_string "0") ~iter:!iterations) () in
       (match search_res with
         | None -> Logger.log ("unknown\n"); UNKNOWN
         | Some x -> Logger.log ("sat\n"); 
-          if !check_assign then (if (BoolEval.RfunBoolEval.eval (VarMap.union (fun key a b -> failwith "Overloaded assignment") x assign) expr) then Logger.log ~level:`always "Assignment was truly a model!\n"
-                                 else Logger.log ~level:`always "Solver gave an incorrect model\n");
+          (*if !check_assign then (if (BoolEval.RfunBoolEval.eval (VarMap.union (fun key a b -> failwith "Overloaded assignment") x assign) expr) then Logger.log ~level:`always "Assignment was truly a model!\n"
+                                 else Logger.log ~level:`always "Solver gave an incorrect model\n");*)
           
-          SAT x
+          SAT (VarMap.map RSearch.to_string x)
       )
     ) in
   res

@@ -2,15 +2,34 @@ module VarMap = Map.Make(String);;
 
 module Logger = Log
 
-module Make () : Sigs.AD = struct
+module Make (A : sig 
+              type t
+              val add : t -> t -> t
+              val mult : t -> t -> t
+              val div : t -> t -> t
+              val exp : t -> t -> t
+              val const : string -> t
+              val to_string : t -> string
+              val compare : t -> t -> int
+            end) : (Sigs.AD with type base = A.t) = struct
   
+  type base = A.t
+
+  let const = A.const
+
+  let add = A.add
+
+  let mult = A.mult
+
+  let to_string = A.to_string
+
   type op = 
     | OAdd
     | OMult
     | ODiv 
-    | OExp of float
+    | OExp of base
     | OVar of string
-    | OConst of float
+    | OConst of base
 
   type node = (op * int list)
 
@@ -19,6 +38,8 @@ module Make () : Sigs.AD = struct
   let node_hash = Hashtbl.hash
 
   module CGraph = Graph.Imperative.Digraph.ConcreteBidirectionalLabeled(struct type t = node let hash = node_hash let compare = compare let equal = (=) end )(struct type t = int let compare = compare let default = 0 end)
+
+  let base_compare = A.compare
 
   module Top = Graph.Topological.Make(CGraph)
 
@@ -76,7 +97,7 @@ module Make () : Sigs.AD = struct
     new_node
 
   let make_const x =
-    let new_node = (OConst x, []) in
+    let new_node = (OConst (A.const x), []) in
     add_node new_node [];
     new_node
 
@@ -100,41 +121,41 @@ module Make () : Sigs.AD = struct
       match curr with 
       | (OVar var, []) ->
         let assignment = VarMap.find var assign in
-        Logger.log ~level:`trace (var ^ ": " ^ (string_of_float assignment) ^ "\n");
+        Logger.log ~level:`trace (var ^ ": " ^ (A.to_string assignment) ^ "\n");
         NodeTbl.add result_tbl curr assignment;
         assignment
       | (OConst x, []) ->
-        Logger.log ~level:`trace ("Const: " ^ (string_of_float x) ^ "\n");
+        Logger.log ~level:`trace ("Const: " ^ (A.to_string x) ^ "\n");
         NodeTbl.add result_tbl curr x;
         x
       | (OAdd, lst) ->
         let succs = CGraph.succ comp_graph curr in
         let left_v = get_value (List.nth succs 0) in
         let right_v = get_value (List.nth succs 1) in
-        let res = left_v +. right_v in 
-        Logger.log ~level:`trace ("Add" ^ (String.concat "" (List.map string_of_int lst)) ^ ": " ^ (string_of_float res) ^ "=" ^ (string_of_float left_v) ^ " + " ^ (string_of_float right_v) ^ "\n");
+        let res = A.add left_v right_v in 
+        Logger.log ~level:`trace ("Add" ^ (String.concat "" (List.map string_of_int lst)) ^ ": " ^ (A.to_string res) ^ "=" ^ (A.to_string left_v) ^ " + " ^ (A.to_string right_v) ^ "\n");
         NodeTbl.add result_tbl curr res;
         res
       | (ODiv, lst) -> 
         let succs = CGraph.succ comp_graph curr in
         let left_v = get_value (List.nth succs 0) in
         let right_v = get_value (List.nth succs 1) in
-        let res = left_v /. right_v in 
-        Logger.log ~level:`trace ("Div" ^ (String.concat "" (List.map string_of_int lst)) ^ ": " ^ (string_of_float res) ^ "=" ^ (string_of_float left_v) ^ " / " ^ (string_of_float right_v) ^ "\n");
+        let res = A.div left_v right_v in 
+        Logger.log ~level:`trace ("Div" ^ (String.concat "" (List.map string_of_int lst)) ^ ": " ^ (A.to_string res) ^ "=" ^ (A.to_string left_v) ^ " / " ^ (A.to_string right_v) ^ "\n");
         NodeTbl.add result_tbl curr res;
         res
       | (OMult, lst) ->
         let succs = CGraph.succ comp_graph curr in
         let left_v = get_value (List.nth succs 0) in
         let right_v = get_value (List.nth succs 1) in
-        let res = left_v *. right_v in 
-        Logger.log ~level:`trace ("Mult" ^ (String.concat "" (List.map string_of_int lst)) ^ ": " ^ (string_of_float res) ^ "=" ^ (string_of_float left_v) ^ " * " ^ (string_of_float right_v) ^ "\n");
+        let res = A.mult left_v right_v in 
+        Logger.log ~level:`trace ("Mult" ^ (String.concat "" (List.map string_of_int lst)) ^ ": " ^ (A.to_string res) ^ "=" ^ (A.to_string left_v) ^ " * " ^ (A.to_string right_v) ^ "\n");
         NodeTbl.add result_tbl curr res;
         res
       | (OExp n, lst) ->
         let base_v = get_value (List.nth (CGraph.succ comp_graph curr) 0) in
-        let res = (base_v) ** n in
-        Logger.log ~level:`trace ("Exp" ^ (String.concat "" (List.map string_of_int lst)) ^ ": " ^ (string_of_float res) ^ "=" ^ (string_of_float base_v) ^ " ** " ^ (string_of_float n) ^ "\n");
+        let res = A.exp base_v n in
+        Logger.log ~level:`trace ("Exp" ^ (String.concat "" (List.map string_of_int lst)) ^ ": " ^ (A.to_string res) ^ "=" ^ (A.to_string base_v) ^ " ** " ^ (A.to_string n) ^ "\n");
         NodeTbl.add result_tbl curr res;
         res
       | _ -> failwith "This case shouldn't be possible"
@@ -151,34 +172,34 @@ module Make () : Sigs.AD = struct
     let aux curr =
       let my_adjoint = 
         (if not (CGraph.V.equal curr r) then 
-          CGraph.fold_pred (fun v acc -> acc +. (EdgeTbl.find edge_tab (v,curr))) comp_graph curr (0.)
-        else (1.))
+          CGraph.fold_pred (fun v acc -> A.add acc (EdgeTbl.find edge_tab (v,curr))) comp_graph curr (A.const "0")
+        else (A.const "1"))
       in
       (match curr with
       | (OAdd, lst) ->
-        Logger.log ~level:`trace ("Add" ^ (String.concat "" (List.map string_of_int lst)) ^ " Adjoint: " ^ (string_of_float my_adjoint) ^ "\n");
+        Logger.log ~level:`trace ("Add" ^ (String.concat "" (List.map string_of_int lst)) ^ " Adjoint: " ^ (A.to_string my_adjoint) ^ "\n");
         CGraph.iter_succ (fun v -> EdgeTbl.replace edge_tab (curr,v) my_adjoint) comp_graph curr
       | (OMult, lst) ->
-        Logger.log ~level:`trace ("Mult" ^ (String.concat "" (List.map string_of_int lst)) ^ " Adjoint: " ^ (string_of_float my_adjoint) ^ "\n");
+        Logger.log ~level:`trace ("Mult" ^ (String.concat "" (List.map string_of_int lst)) ^ " Adjoint: " ^ (A.to_string my_adjoint) ^ "\n");
         let succ_v = CGraph.succ comp_graph curr in
         let v1 = List.nth succ_v 0 in 
         let v2 = List.nth succ_v 1 in
-        EdgeTbl.replace edge_tab (curr, v1) ((NodeTbl.find result_tbl v2) *. my_adjoint);
-        EdgeTbl.replace edge_tab (curr, v2) ((NodeTbl.find result_tbl v1) *. my_adjoint);
+        EdgeTbl.replace edge_tab (curr, v1) (A.mult (NodeTbl.find result_tbl v2) my_adjoint);
+        EdgeTbl.replace edge_tab (curr, v2) (A.mult (NodeTbl.find result_tbl v1) my_adjoint);
       | (ODiv, lst) ->
-        Logger.log ~level:`trace ("Div" ^ (String.concat "" (List.map string_of_int lst)) ^ " Adjoint: " ^ (string_of_float my_adjoint) ^ "\n");
+        Logger.log ~level:`trace ("Div" ^ (String.concat "" (List.map string_of_int lst)) ^ " Adjoint: " ^ (A.to_string my_adjoint) ^ "\n");
         let succ_v = CGraph.succ comp_graph curr in
         let v1 = List.nth succ_v 0 in 
         let v2 = List.nth succ_v 1 in
-        EdgeTbl.replace edge_tab (curr, v1) (my_adjoint /. (NodeTbl.find result_tbl v2));
-        EdgeTbl.replace edge_tab (curr, v2) (my_adjoint *. (NodeTbl.find result_tbl curr) /. (NodeTbl.find result_tbl v2) *. (-.1.));
+        EdgeTbl.replace edge_tab (curr, v1) (A.div my_adjoint (NodeTbl.find result_tbl v2));
+        EdgeTbl.replace edge_tab (curr, v2) (A.mult (A.div (A.mult my_adjoint (NodeTbl.find result_tbl curr)) (NodeTbl.find result_tbl v2))  (A.const "-1"));
       | (OExp n, lst) ->
         let succ_n = List.nth (CGraph.succ comp_graph curr) 0 in
         let succ_v = NodeTbl.find result_tbl succ_n in
-        Logger.log ~level:`trace ("Exp" ^ (String.concat "" (List.map string_of_int lst)) ^ " Adjoint: " ^ (string_of_float my_adjoint) ^ "\n");
-        EdgeTbl.replace edge_tab (curr, succ_n) (n*.(succ_v)**(n -. 1.)*. my_adjoint)
+        Logger.log ~level:`trace ("Exp" ^ (String.concat "" (List.map string_of_int lst)) ^ " Adjoint: " ^ (A.to_string my_adjoint) ^ "\n");
+        EdgeTbl.replace edge_tab (curr, succ_n) (A.mult (A.mult n (A.exp succ_v (A.add n (A.const "-1")))) my_adjoint)
       | (OVar var, []) ->
-        Logger.log ~level:`trace (var ^ " Adjoint: " ^ (string_of_float my_adjoint) ^ "\n");
+        Logger.log ~level:`trace (var ^ " Adjoint: " ^ (A.to_string my_adjoint) ^ "\n");
         grad_map := VarMap.add var my_adjoint !grad_map
       | (OConst _, _) -> ()
       | _ -> failwith "Ill formed computation graph")

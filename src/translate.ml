@@ -5,20 +5,23 @@ module Logger = Log
 
 module type Base = sig
   type t
-  val update : float -> float -> float
-  val make_base : Z3.Expr.expr -> float VarMap.t -> t * string list
-  val make_base_not : (Z3.Expr.expr -> float VarMap.t -> t * string list) option
-  val make_equals : Z3.Expr.expr -> Z3.Expr.expr -> float VarMap.t -> t * string list
+  type base
+  val update : base -> base -> base
+  val make_base : Z3.Expr.expr -> base VarMap.t -> t * string list
+  val make_base_not : (Z3.Expr.expr -> base VarMap.t -> t * string list) option
+  val make_equals : Z3.Expr.expr -> Z3.Expr.expr -> base VarMap.t -> t * string list
 end
 
-module BoolRfun (A : Sigs.BoolEmb) : (Base with type t = A.t) = struct
+module BoolRfun (A : Sigs.BoolEmb) : (Base with type t = A.t with type base = A.base) = struct
   type t = A.t
 
+  type base = A.base
+
   let update value gradient =
-    if gradient < 0. && value > 0. then
-      0.
-    else if gradient > 0. && value < 1. then
-      1.
+    if (A.base_compare gradient (A.const "0")) < 0 && (A.base_compare value (A.const "0")) > 0 then
+      A.const "0"
+    else if (A.base_compare gradient (A.const "0")) > 0 && (A.base_compare value (A.const "0")) < 0 then
+      A.const "1"
     else value
 
   let make_base expr set_vals = 
@@ -26,11 +29,11 @@ module BoolRfun (A : Sigs.BoolEmb) : (Base with type t = A.t) = struct
       let name = (Z3.Expr.to_string expr) in
       try
         let value = VarMap.find name set_vals in
-        if value > 0.5 then (A.make_true (), [])
+        if A.base_compare value (A.const "0.5") > 0 then (A.make_true (), [])
         else (A.make_false (), [])
       with Not_found ->
         let variable = A.make_var name in
-        let minus_half = A.make_const (-.0.5) in
+        let minus_half = A.make_const "-0.5" in
         (A.make_add variable minus_half, [name]))
     else failwith ("unknown Expr node: \n" ^ (Z3.Expr.to_string expr))
 
@@ -40,14 +43,16 @@ module BoolRfun (A : Sigs.BoolEmb) : (Base with type t = A.t) = struct
 
 end
 
-module BoolLoss (A : Sigs.BoolEmb) : (Base with type t = A.t) = struct
+module BoolLoss (A : Sigs.BoolEmb) : (Base with type t = A.t with type base = A.base) = struct
   type t = A.t
 
+  type base = A.base
+
   let update value gradient =
-    if gradient > 0. && value > 0. then
-      0.
-    else if gradient < 0. && value < 1. then
-      1.
+    if (A.base_compare gradient (A.const "0")) > 0 && (A.base_compare value (A.const "0")) > 0 then
+      A.const "0"
+    else if (A.base_compare gradient (A.const "0")) < 0 && (A.base_compare value (A.const "1")) < 0 then
+      A.const "1"
     else value
 
   let make_base expr set_vals = 
@@ -55,13 +60,13 @@ module BoolLoss (A : Sigs.BoolEmb) : (Base with type t = A.t) = struct
       let name = (Z3.Expr.to_string expr) in
       try
         let value = VarMap.find name set_vals in
-        if value = 0. then (A.make_true (), [])
+        if A.base_compare value (A.const "0") = 0 then (A.make_true (), [])
         else (A.make_false (), [])
       with Not_found ->
         let variable = A.make_var name in
-        let minus_1 = A.make_const (- 1.) in
+        let minus_1 = A.make_const "-1" in
         let var_minus_1 = A.make_add variable minus_1 in
-        (A.make_exp var_minus_1 2., [name]))
+        (A.make_exp var_minus_1 (A.const "2"), [name]))
     else failwith ("unknown Expr node: \n" ^ (Z3.Expr.to_string expr))
 
   let make_base_not = Some (fun expr set_vals ->
@@ -69,11 +74,11 @@ module BoolLoss (A : Sigs.BoolEmb) : (Base with type t = A.t) = struct
       let name = (Z3.Expr.to_string expr) in
       try
         let value = VarMap.find name set_vals in
-        if value = 0. then (A.make_false (), [])
+        if A.base_compare value (A.const "0") = 0 then (A.make_false (), [])
         else (A.make_true (), [])
       with Not_found ->
         let variable = A.make_var name in
-        (A.make_exp variable 2., [name]))
+        (A.make_exp variable (A.const "2"), [name]))
     else failwith ("unknown Expr node: \n" ^ (Z3.Expr.to_string expr))
   )
 
@@ -81,23 +86,26 @@ module BoolLoss (A : Sigs.BoolEmb) : (Base with type t = A.t) = struct
 
 end
 
-module ArithRfun (A : Sigs.BoolEmb) : (Base with type t = A.t) = struct
+module ArithRfun (A : Sigs.BoolEmb) : (Base with type t = A.t with type base = A.base) = struct
   type t = A.t
 
-  let step_size = 0.01
+  type base = A.base
 
-  let update value gradient =
-    if gradient < 0. then
-      value -. step_size
-    else if gradient > 0. then
-      value +. step_size
+  let step_size = A.const "0.01"
+
+  let update value gradient = 
+    if A.base_compare gradient (A.const "0") < 0 then
+      let minus_step = A.mult step_size (A.const "-1") in
+      A.add value minus_step
+    else if A.base_compare gradient (A.const "0") > 0 then
+      A.add value step_size
     else value
 
   let vars = ref []
 
   let rec translate_fun expr = 
     if Z3.Arithmetic.is_arithmetic_numeral expr then (
-      let value = float_of_string (Z3.Expr.to_string expr) in
+      let value = Z3.Expr.to_string expr in
       A.make_const value)
     else if Z3.Expr.is_const expr then (
       let name = (Z3.Expr.to_string expr) in
@@ -111,26 +119,26 @@ module ArithRfun (A : Sigs.BoolEmb) : (Base with type t = A.t) = struct
       List.fold_left A.make_mult (List.hd children) (List.tl children))
       else if Z3.Arithmetic.is_uminus expr then (
       let child = translate_fun (List.nth (Z3.Expr.get_args expr) 0) in
-      let minus_1 = A.make_const (-1.) in
+      let minus_1 = A.make_const "-1" in
       A.make_mult child minus_1)
     else if Z3.Arithmetic.is_sub expr then (
       let children = List.map translate_fun (Z3.Expr.get_args expr) in
       let left = List.nth children 0 in
-      let neg_right = A.make_mult (List.nth children 1) (A.make_const (-1.)) in
+      let neg_right = A.make_mult (List.nth children 1) (A.make_const "-1") in
       A.make_add left neg_right)
     else if Z3.Arithmetic.is_div expr then (
       let children = List.map translate_fun (Z3.Expr.get_args expr) in
       A.make_div (List.nth children 0) (List.nth children 1))
     else if Z3.Arithmetic.is_int2real expr then (
-      let value = float_of_string (Z3.Expr.to_string (List.nth (Z3.Expr.get_args expr) 0)) in
+      let value = Z3.Expr.to_string (List.nth (Z3.Expr.get_args expr) 0) in
       A.make_const value)
     else if Z3.Arithmetic.is_real expr then (
-      let value = float_of_string (Z3.Expr.to_string expr) in
+      let value = Z3.Expr.to_string expr in
       A.make_const value)
     else failwith ("Unsupported base function: " ^ (Z3.Expr.to_string expr))
   
   let make_ge left_fun right_fun =
-    let minus_1 = A.make_const (-1.) in
+    let minus_1 = A.make_const "-1" in
     let neg_right = A.make_mult right_fun minus_1 in
     A.make_add left_fun neg_right
   
@@ -173,6 +181,7 @@ module ArithRfun (A : Sigs.BoolEmb) : (Base with type t = A.t) = struct
 
 end
 
+(*
 module ArithLoss (A : Sigs.BoolEmb) : (Base with type t = A.t) = struct
   type t = A.t
 
@@ -290,11 +299,15 @@ module ArithLoss (A : Sigs.BoolEmb) : (Base with type t = A.t) = struct
 
 end
 
-module Make (A : Sigs.BoolEmb)(B : Base with type t = A.t) : Sigs.BuildSearch = struct
+*)
+
+module Make (A : Sigs.BoolEmb)(B : Base with type t = A.t with type base = A.base) : Sigs.BuildSearch = struct
   
   include A
 
   let update = B.update
+
+  let from_string = A.const
 
   let need_nnf = match B.make_base_not with | None -> false | Some _ -> true
 
@@ -417,6 +430,6 @@ module MakeRfunArith (A : Sigs.AD) = struct module X = Rfun.Make(A) include Make
 
 module MakeRfunBool (A : Sigs.AD) = struct module X = Rfun.Make(A) include Make(X)(BoolRfun(X)) end
 
-module MakeLossBool (A : Sigs.AD) = struct module X = Loss.Make(A) include Make(X)(BoolLoss(X)) end
+(*module MakeLossBool (A : Sigs.AD) = struct module X = Loss.Make(A) include Make(X)(BoolLoss(X)) end
 
-module MakeLossArith (A : Sigs.AD) = struct module X = Loss.Make(A) include Make(X)(ArithLoss(X)) end
+module MakeLossArith (A : Sigs.AD) = struct module X = Loss.Make(A) include Make(X)(ArithLoss(X)) end*)
